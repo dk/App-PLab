@@ -15,6 +15,8 @@ $Config{'startperl'} -w
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
+
+#!/usr/bin/perl -w
 #!/usr/bin/perl -w
 
 use strict;
@@ -55,6 +57,7 @@ sub win_inidefaults
       SpectrumMin        => 0,
       SpectrumMax        => 50,
       ShowExtras         => 0,
+      ShowPrevExtras     => 0,
       C_minUF            => 1,
       C_maxUF            => 5,
       C_stepUF           => 10,
@@ -260,7 +263,11 @@ sub xmlload
             } elsif ( $state{record_index} == $smin) {
             # handle first frame
                $w-> {'ex' . $uctype} =  [ @data ];
-            }
+            } 
+	    if ( $state{record_index} == $w-> {fileNum} - 1) {
+            # handle previous frame
+               $w-> {'prevex' . $uctype} =  [ @data ];
+	    }
             # store record
             $w-> {info}->{$state{record_index}}-> {$lctype} = [@data];
             $totals{$uctype} += scalar @data;
@@ -426,6 +433,10 @@ sub load_info
       if ( $fn == $smin && !$isCurrentFrame) {
          $w-> {exCells} = [@cells];
          $w-> {exProcesses} = [@processes];
+      }
+      if ( $fn + 1 == $w->{fileNum}) {
+         $w-> {prevexCells} = [@cells];
+         $w-> {prevexProcesses} = [@processes];
       }
       
       if ( $isCurrentFrame) {
@@ -772,6 +783,7 @@ sub win_newframe
       my $c = ucfirst $_;
       $w-> {$_} = [];
       $w-> {"ex$c"} = [];
+      $w-> {"prevex$c"} = [];
       $w-> {"n$c"} = $w-> {"total$c"} = 0;
    }
    $w-> {branches} = [];
@@ -1093,7 +1105,7 @@ sub process
    $dd = int($i-> width / 4); $dd++ unless $i % 2;
    $i = IPA::Point::subtract( $i, IPA::Local::median( $i, w => $dd, h => $dd));
    $i = IPA::Local::unionFind( $i, method => 'ave', threshold => 10);
-   $i = IPA::Local::median( $i, w => 7, h => 7);
+#   $i = IPA::Local::median( $i, w => 7, h => 7);
 
    return $w-> win_leavesubplace( $i) if $mode == 1;
 
@@ -1673,6 +1685,14 @@ sub IV_Paint
             $canvas-> line( $x - 3, $y + 3, $x + 3, $y - 3);
          }
       }
+      if ( $w-> {ini}-> {ShowPrevExtras}) {
+         foreach (@{$w-> {"prevex" . ucfirst $layer}}) {
+            my ($x, $y) = split;
+            $x *= $z; $y *= $z;
+            $canvas-> line( $x - 3, $y - 3, $x + 3, $y + 3);
+            $canvas-> line( $x - 3, $y + 3, $x + 3, $y - 3);
+         }
+      }
    }
 
    my $lw = $canvas->lineWidth;
@@ -1741,11 +1761,17 @@ sub opt_propcreate
        width  => 120,
        text   => 'Number of lines',
    ], [ CheckBox => 
-       origin  => [ 10, 155],
+       origin  => [ 10, 190],
        size    => [ 374, 36], 
        name    => 'ShowExtras',
-       text    => '~Show extra markings',
+       text    => '~Show first image markings',
        hint    => "If on, the markings on the first image in the series\nwill be displayed as crosses",
+   ], [ CheckBox => 
+       origin  => [ 10, 155],
+       size    => [ 374, 36], 
+       name    => 'ShowPrevExtras',
+       text    => '~Show previous image markings',
+       hint    => "If on, the markings on the previous image\nwill be displayed as crosses",
    ], [ Label => 
        origin  => [ 190, 130 ],
        autoWidth => 1,
@@ -1875,6 +1901,7 @@ sub opt_proppush
    $nbpages-> nLines-> value( $w->{ini}->{nLines});
    $nbpages-> Datasets-> value( $w->{ini}->{active_datasets});
    $nbpages-> ShowExtras-> checked( $w-> {ini}-> {ShowExtras});
+   $nbpages-> ShowPrevExtras-> checked( $w-> {ini}-> {ShowPrevExtras});
    my $hs = $nbpages-> Hyperset;
    $hs-> items( [ map { ucfirst } @{$w->{layers}} ]);
    $hs-> vector( pack( 'I*', $w->{ini}-> {visible_datasets}));
@@ -1908,10 +1935,12 @@ sub opt_proppop
             my $u = ucfirst $_;
             $w->{$_} ||= [];
             $w->{"ex$u"} ||= [];
+            $w->{"prevex$u"} ||= [];
             $w->{"$_$u"} ||= 0 for qw(n total);
          }
       }
       $w-> {ini}-> {ShowExtras} = $nbpages-> ShowExtras-> checked;
+      $w-> {ini}-> {ShowPrevExtras} = $nbpages-> ShowPrevExtras-> checked;
       my ( $a, $b) = ($ssl-> {min},$ssl-> {max});
       if ( ($w->{ini}->{SpectrumMin} != $a) ||
            ($w->{ini}->{SpectrumMax} != $b)) {
