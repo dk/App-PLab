@@ -942,7 +942,9 @@ sub process
       $i-> rop( rop::NotSrcAnd);
       $i-> put_image( 0, 0, $centers);
       $i-> type( im::bpp8);
-      $i-> palette([0,0,255,0,255,0]);
+      my @ipal = @{$i-> palette};
+      splice( @ipal, 0, 6, ( 0,0,255,0,255,0 ));
+      $i-> palette(\@ipal);
       $w-> win_leavesubplace( $i);
       return;
    }
