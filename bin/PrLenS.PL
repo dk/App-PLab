@@ -10,6 +10,7 @@ chmod(0755, $file);
 print "Extracting $file (with variable substitutions)
 ";
 
+
 print OUT <<"!GROK!THIS!";
 $Config{'startperl'} -w
 !GROK!THIS!
