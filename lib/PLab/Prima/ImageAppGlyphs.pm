@@ -15,7 +15,7 @@ package ImageAppGlyphs;
 use Prima::StdBitmap;
 
 my $testing = 0;
-my $bmImageFile = Prima::find_image( '', "PLab::Prima::ImageApp.gif");
+my $bmImageFile = Prima::Utils::find_image( '', "PLab::Prima::ImageApp.gif");
 
 sub icon  { return Prima::StdBitmap::load_std_bmp( $_[0], 1, 0, $bmImageFile); }
 sub image { return Prima::StdBitmap::load_std_bmp( $_[0], 0, 0, $bmImageFile); }

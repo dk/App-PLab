@@ -1346,7 +1346,7 @@ sub win_showrec
 {
   my $w = $_[0];
   unless ( $w-> {recWindow}) {
-     my $fi = Prima::find_image( '', 'PLab::Prima::prlens.fm');
+     my $fi = Prima::Utils::find_image( '', 'PLab::Prima::prlens.fm');
      unless ( defined $fi) { Prima::message( "Cannot find resource: PLab::Prima::prlens.fm"); return }
       eval { $w-> {recWindow} = { Prima::VB::VBLoader::AUTOFORM_CREATE( $fi,
          Form1 => {
