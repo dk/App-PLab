@@ -1,9 +1,9 @@
-use strict;
 use Prima;
 use Prima::Application name => "Morphometry I";
 use PLab::Prima::ImageApp;
 use PLab::Prima::Calibrations;
 use Prima::Edit;
+use Prima::ExtLists;
 use IPA::Local;
 use IPA::Point;
 use IPA::Global;
@@ -11,6 +11,13 @@ use IPA::Misc;
 use XML::Parser;
 
 $::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
+
+package ocq;
+
+use constant Files      => 0;
+use constant Basics     => 1;
+use constant Histogram  => 2;
+use constant Equalize   => 3;
 
 package MorphoWindow;
 use vars qw(@ISA);
@@ -312,6 +319,8 @@ sub win_objectlwmenuaction
 sub win_inidefaults
 {
    my $w = $_[0];
+   my $calcopt = '';
+   vec( $calcopt, 0, 32) = ocq::Files | ocq::Basics;
    return (
       $w-> SUPER::win_inidefaults,
       FeaturesColor    => '0x00FF00',
@@ -335,6 +344,7 @@ sub win_inidefaults
       HolesPercent     => 5,
       NumberOfRotations=> 128,
       StatPath         => '.',
+      CalcOptions      => $calcopt,
    );
 }
 
@@ -1278,6 +1288,37 @@ sub opt_changecalib
    }
 }
 
+sub opt_calcdlg
+{
+   my $w = $_[0];
+   my $d = $w->{CalcOptDialog};
+   unless ( $d) {
+      $d = Prima::Dialog-> create(
+         size     => [ 320, 200],
+         text     => 'Select items to calculate',
+         owner    => $w,
+         centered => 1,
+      );
+      $d-> insert( CheckList => 
+         origin => [ 10, 76],
+         size   => [ 300, 110],
+         name   => 'CheckList',
+         vector => $w-> {ini}->{CalcOptions},
+         vScroll=> 1,
+         items  => [
+            'List of files',
+            'Morphometric parameters',
+            'Brightness histogram',
+            'Subtract backround from histogram',
+         ],
+      );
+      $w-> dlg_okcancel( $d);
+      $w->{CalcOptDialog} = $d;
+   }
+   return if $d-> execute != cm::OK;
+   return $w-> {ini}-> {CalcOptions} = $d-> CheckList-> vector;
+}
+
 sub opt_statistics
 {
    my $w = $_[0];
@@ -1297,6 +1338,9 @@ sub opt_statistics
    my @res = $d-> execute;
    return unless @res;
 
+   my $dres = $w-> opt_calcdlg;
+   return unless defined $dres;
+
    my %dataCommon = ();
    my %dataFore   = ();
    my %dataBack   = ();
@@ -1310,8 +1354,10 @@ sub opt_statistics
 
 
    for my $xmlname ( @res) {
+      my ( $bN, $bSum, @hist);
       my $state = $w-> win_xmlload( $xmlname, onObject => sub {
          my ( $attrs, $n0, $n1) = @_;
+         # collect sum of backgrounds
          if ( $attrs->{type} eq $n0 || $attrs->{type} eq $n1) {
             my $stref = $attrs->{type} eq $n0 ? \%dataFore : \%dataBack;
             if ( 3 == grep {exists $attrs->{$_}} qw{brightnessN brightnessSum brightnessSum2}) {
@@ -1321,10 +1367,17 @@ sub opt_statistics
                $stref->{brightness}-> [2] += $attrs->{brightnessSum2};
                # XXX warning - bogus data for backgrounds !!
                $stref->{brightness}-> [$statCount + $index] = $attrs->{brightnessSum} / $attrs->{brightnessN};
+               # collect local sum of background data
+               if ( $attrs->{type} eq $n1) {
+                  $bN   += $attrs->{brightnessN};
+                  $bSum += $attrs->{brightnessSum};
+               }
             }
             return if $attrs->{type} eq $n1; # no background relevant data further
 
             push @dataHist, exists( $attrs->{histogram}) ? [split(' ', $attrs->{histogram})] : undef;
+            push( @hist, $dataHist[-1]) if $dataHist[-1]; # push the histogram ref for the post-processing
+            
             if ( exists $attrs->{area} && exists $attrs->{harea}) {
                my $nh = 0;
                my $tharea = 0;
@@ -1358,8 +1411,26 @@ sub opt_statistics
             }
             $index++;
          }
-      } );
+      } 
+      );
       return unless $state;
+      # subtract backgrounds
+      if ( vec( $dres, ocq::Equalize, 1)) {
+          if (!$bN && @hist) {
+             # noting to subtract, nulling histograms
+             splice( @dataHist, -(@hist), (@hist), (undef)x scalar(@hist));
+          } elsif ( @hist) {
+             my $b = int($bSum / $bN); # average brightness for background(s) within file
+             if ( $b > 255 || $b < 0) {
+                $@ = "Somehow the average brightness is not in range of 0..255.\n";
+                $w-> win_xmlerror( $xmlname);
+             }   
+             for ( @hist) { # shift array left $b times
+                splice( @$_, 0, 0, (0)x(255-$b)); # add space for negative brightnesses
+                push( @$_, (0)x($b)); 
+             }
+          }   
+      }
    }
 
    $dataCommon{brightness} = $dataFore{brightness} if defined $dataFore{brightness};
@@ -1413,13 +1484,15 @@ sub opt_statistics
    my $hdr        = sprintf( "    # | $exformat", @names);
    my $texts = '';
    my $tm = localtime;
-   my $howmany = ( scalar @res > 1) ? "s were" : " was";
    $texts = <<HR;
 Statistics morphology data
 Calculated on $tm
-The following file$howmany used for data gathering:
 HR
-   $texts .= "   $_\n" for @res;
+   if ( vec( $dres, ocq::Files, 1)) {
+      my $howmany = ( scalar @res > 1) ? "s were" : " was";
+      $texts .= "The following file$howmany used for data gathering:\n";
+      $texts .= "   $_\n" for @res;
+   }
    $texts .= sprintf("Average background brightness: %.7g +/- %.7g (averaged by %d pixels)\n",
       $dataBack{brightness}->[1],
       $dataBack{brightness}->[3],
@@ -1427,72 +1500,113 @@ HR
    ) if defined $dataBack{brightness};
    my ( $title, $meta1, $meta2) = ( "$texts\n", '', '');
 
+   if ( vec( $dres, ocq::Basics, 1)) 
    {
-      (my $xhdr = $hdr) =~ s/\s\|//g;
-      my $xdivline = '-' x length $xhdr;
-      $meta1 = $meta2 = "$xdivline\n$xhdr$xdivline\n";
-   }
-
-   $texts .="\n$divline$hdr$divline";
-   my $i;
-   my @avail = ( 1 ) x ( scalar @names);
-
-   for ( $i = 0; $i < $index; $i++) {
-      my @data = map { $dataCommon{$_}->[$i + $statCount]} @names;
-      my $j = 0;
-      for ( @data) {
-         $avail[ $j++] &= defined ($_) ? 1 : 0;
-         $_ = defined $_ ? sprintf( '%13.7g', $_) : "N/A";
+      {
+         (my $xhdr = $hdr) =~ s/\s\|//g;
+         my $xdivline = '-' x length $xhdr;
+         $meta1 = $meta2 = "$xdivline\n$xhdr$xdivline\n";
       }
-      $texts .= sprintf( "$colsformat$exformat",   $i + 1, @data);
-      $meta1 .= sprintf( "$colsformat2$exformat2", $i + 1, @data);
-   }
-   $texts .= $divline . $hdr . $divline;
-   my @elabels = qw( N Ave SD SEM);
-   for $i ( 1, 3, 2, 0) {
-      my @data = map { $dataCommon{$_}->[$i]} @names;
-      my $j = 0;
-      for ( @data) {
-         $_ = defined $_ ? ( sprintf( '%1'.($avail[$j] ? '3' : '2').'.7g', $_).($avail[$j] ? '' : '*')) : "N/A";
-         $j++;
-      }
-      $texts .= sprintf( "$colsformat$exformat",  $elabels[$i], @data);
-      $meta2 .= sprintf( "$colsformat2$exformat2", $elabels[$i], @data);
-   }
-   $texts .= $divline;
 
-   if ( grep { defined $_ } @dataHist) { # print histogram only if available 
-      my $maxSpace = 3;
-      # calc. formatting space
-      for ( @dataHist) {
-         next unless defined $_;
-         for ( @$_) {
-            $maxSpace = length($_) if $maxSpace < length($_);
-         }   
-      }   
-      
-      $texts .= "\nBrightness histogram data\n";
-      $meta2 .= "\nBrightness histogram data\n";
-      my $xdivline = ('-' x ( 256 * ( $maxSpace + 1) + 8))."\n";
-      $texts .= $xdivline;
-      $meta2 .= $xdivline;
-      my $cfmt  = ("\%${maxSpace}d " x 256);
-      my $i = 0;
-      $texts .= sprintf( "  N | $cfmt |\n", 0..255);
-      $meta2 .= sprintf( "  N  $cfmt\n", 0..255);
-      $texts .= $xdivline;
-      $meta2 .= $xdivline;
-      for ( @dataHist) {
-         $i++;
-         unless ( defined $_) {
-            $texts .= sprintf( "%3d | N/A\n", $i);
-            $meta2 .= sprintf( "%3d  N/A\n", $i);
-            next;
-         }   
-         $texts .= sprintf( "%3d | $cfmt |\n", $i, @$_);
-         $meta2 .= sprintf( "%3d  $cfmt\n", $i, @$_);
+      $texts .="\n$divline$hdr$divline";
+      my $i;
+      my @avail = ( 1 ) x ( scalar @names);
+
+      for ( $i = 0; $i < $index; $i++) {
+         my @data = map { $dataCommon{$_}->[$i + $statCount]} @names;
+         my $j = 0;
+         for ( @data) {
+            $avail[ $j++] &= defined ($_) ? 1 : 0;
+            $_ = defined $_ ? sprintf( '%13.7g', $_) : "N/A";
+         }
+         $texts .= sprintf( "$colsformat$exformat",   $i + 1, @data);
+         $meta1 .= sprintf( "$colsformat2$exformat2", $i + 1, @data);
       }
-      $texts .= $xdivline;
+      $texts .= $divline . $hdr . $divline;
+      my @elabels = qw( N Ave SD SEM);
+      for $i ( 1, 3, 2, 0) {
+         my @data = map { $dataCommon{$_}->[$i]} @names;
+         my $j = 0;
+         for ( @data) {
+            $_ = defined $_ ? ( sprintf( '%1'.($avail[$j] ? '3' : '2').'.7g', $_).($avail[$j] ? '' : '*')) : "N/A";
+            $j++;
+         }
+         $texts .= sprintf( "$colsformat$exformat",  $elabels[$i], @data);
+         $meta2 .= sprintf( "$colsformat2$exformat2", $elabels[$i], @data);
+      }
+      $texts .= $divline;
+   }
+   
+   if ( vec( $dres, ocq::Histogram, 1)) {
+       my $maxSpace = 10;
+       my ( $cnt, $min, $max) = ( 0, 255, 0);
+       for ( @dataHist) {
+          next unless defined $_;
+          $cnt++;
+          my $j = 0;
+          $j++ while $j < @$_ && $$_[$j] == 0;
+          $min = $j if $j < $min;
+          $j = @$_ - 1;
+          $j-- while $j && $$_[$j] == 0;
+          $max = $j if $j > $max;
+       }   
+       for ( @dataHist) {
+          splice( @$_, $max);
+          splice( @$_, 0, $min);
+       } 
+       
+       my ( @sum, @sum2, @ave, @sd, @sem, $j);
+       for ( @dataHist) {
+          next unless $_;
+          for ( $j = 0; $j < @$_; $j++) {
+             $sum[$j] += $$_[$j];
+             $sum2[$j] += $$_[$j] * $$_[$j];
+          }
+       }  
+       for ( $j = 0; $j < @sum; $j++) {
+          $sum2[$j] /= $cnt;
+          my $x = $sum[$j] / $cnt;
+          $sum2[$j] = $sum2[$j] - $x * $x;
+          $ave[$j]  = $sum[$j] / $cnt;
+          $sd[$j]   = sqrt( $sum2[$j]);
+          $sem[$j]  = sqrt( $sum2[$j] / $cnt);
+       }   
+       
+       $texts .= "\nBrightness histogram data\n";
+       $meta2 .= "\nBrightness histogram data\n";
+       if ( vec( $dres, ocq::Equalize, 1)) {
+          $max -= $min;
+          $min = 0;
+       } 
+       
+       my $xdivline = ('-' x (( $max - $min + 1) * ( $maxSpace + 1) + 8))."\n";
+       $texts .= $xdivline;
+       $meta2 .= $xdivline;
+       my $cfmt  = ("\%10.5g " x ( $max - $min + 1));
+       my $i = 0;
+       $texts .= sprintf( "  N | $cfmt |\n", $min..$max);
+       $meta2 .= sprintf( "  N  $cfmt\n",    $min..$max);
+       $texts .= $xdivline;
+       $meta2 .= $xdivline;
+       for ( @dataHist) {
+          $i++;
+          unless ( defined $_) {
+             $texts .= sprintf( "%3d | N/A\n", $i);
+             $meta2 .= sprintf( "%3d  N/A\n", $i);
+             next;
+          }   
+          $texts .= sprintf( "%3d | $cfmt |\n", $i, @$_);
+          $meta2 .= sprintf( "%3d  $cfmt\n", $i, @$_);
+       }
+       $texts .= $xdivline;
+       $texts .= sprintf( "%3s | $cfmt |\n", 'Ave', @ave);
+       $texts .= sprintf( "%3s | $cfmt |\n", 'Ave', @ave);
+       $texts .= sprintf( "%3s | $cfmt |\n", 'SEM', @sd);
+       $texts .= sprintf( "%3s | $cfmt |\n", 'SD', @sd);
+       $meta2 .= sprintf( "%3s $cfmt\n", 'Sum', @sum);
+       $meta2 .= sprintf( "%3s $cfmt\n", 'SEM', @sd);
+       $meta2 .= sprintf( "%3s $cfmt\n", 'SD', @sd);
+       $meta2 .= sprintf( "%3s $cfmt\n", 'Sum', @sum);
    }
 
 
