@@ -11,6 +11,7 @@ use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
               IniFile Sliders Utils Notebooks ComboBox Buttons Label
               ColorDialog Contrib::ButtonGlyphs KeySelector);
 use PLab;
+use Prima::Contrib::ButtonGlyphs;
 use PLab::Prima::ImageAppGlyphs;
 no Prima::StartupWindow;
 
@@ -996,6 +997,7 @@ sub opt_propcreate
       $nb-> insert_to_page( 1, ColorComboBox =>
          name   => 'ColorSel',
          origin => [ 190, 10],
+         size   => [ 56, $nb-> font-> height + 2],
          onChange => sub {
             unless ( $nbpages-> {deprecate}) {
                my $colors = $dlg-> {page2}-> {colors};
@@ -1178,7 +1180,7 @@ sub opt_properties
 {
    my $w = $_[0];
    unless ( $w-> {propertySheet}) {
-      my $dlg = Prima::Dialog-> create(
+      my $dlg = Prima::Window-> create(
          size     => [ 420, 460],
          text     => 'Properties',
          owner    => $w,
@@ -1232,7 +1234,7 @@ sub IV_MouseDown
 
    my $ms = $self-> get_mouse_state;
    my $lr = mb::Left | mb::Right;
-   if ((( $ms & $lr) == $lr) or ( $ms & mb::Middle)) {
+   if ((( $ms & $lr) == $lr) or ( $btn == mb::Middle)) {
       defined $w-> {magnify} ? $w-> iv_cancelmagnify( $self) : $w-> iv_magnify( $self),
       return;
    }
