@@ -342,6 +342,9 @@ sub win_inidefaults
       NumberOfRotations=> 128,
       StatPath         => '.',
       CalcOptions      => $calcopt,
+      FrameWidth       => 0,
+      FrameColor       => 0,
+      InvertImage      => 0,
    );
 }
 
@@ -684,6 +687,16 @@ sub win_applycontours
    $w-> win_restore;
 }
 
+sub win_set_negative
+{
+   my ( $w, $neg) = @_;
+   $neg = $neg ? 1 : 0;
+   return if $w-> {ini}-> {InvertImage} == $neg;
+   $w-> {ini}-> {InvertImage} = $neg;
+   $w-> menu-> EditInvertImage-> checked( $neg);
+   return unless $w-> IV-> image;
+   $w-> win_loadfile( $w-> {file});
+}
 
 sub win_abortpacket
 {
@@ -793,13 +806,44 @@ sub win_newframe
       defined $w-> {oldPath} && $w-> {oldPath} ne $w-> {ini}-> {path};
    $w-> {oldPath} = $w-> {ini}-> {path};
 
+   
+   my $img = $w-> IV-> image;
+   
+   if ( $w-> {ini}-> {InvertImage}) {
+      my ( $gray, $bpp) = ( $img-> type & im::GrayScale, $img-> type & im::BPP);
+      if ( $gray && $bpp > 1) {
+         $img-> resample( 0, 255, 255, 0);
+      } elsif ( $bpp < 24) {
+         $img-> palette([ map { 255 - $_} @{$img-> palette}]);
+      } else {
+         my $c = $img-> data;
+         $c =~ s/(.)/chr(255-ord($1))/ge;
+         $img-> data( $c); 
+      }
+   }
+
+   my @is = $img-> size;
+   my $i;
+   my $lw = $w-> {ini}-> {FrameWidth};
+   my $c  = $w-> {ini}-> {FrameColor} ? 0xffffff : 0;
+   while ( $lw--) {
+      for ( $i = $lw; $i < $is[0] - $lw; $i++) {
+         $img-> pixel( $i, $lw, $c);
+         $img-> pixel( $i, $is[1]-$lw-1, $c);
+      }
+      for ( $i = $lw; $i < $is[1] - $lw; $i++) {
+         $img-> pixel( $lw, $i, $c);
+         $img-> pixel( $is[0]-$lw-1, $i, $c);
+      }
+   }
+
+
    my $xmlname = $w-> win_extname( $w-> {file});
    return unless -f $xmlname;
 
    $w-> {file} =~ m{[/\\]([^/\\]*)$};
    my $iname = $1;
 
-   my @is = $w-> IV-> image-> size;
 
    my $state = $w-> win_xmlload( $xmlname);
    return unless $state;
@@ -1211,6 +1255,7 @@ sub opt_keys
       Undo1         => [ kb::Backspace => "Undo drawing"],
       Undo2         => [ km::Alt|kb::Backspace => "Undo group of lines"],
       Undo3         => [ '@U'          => "Show undo dialog"],
+      EditInvertImage => [ kb::NoKey   => "Invert image"],
       EditClearAll  => [ kb::NoKey     => "Clear all drawings"],
       EditRemovePoints   => [ kb::NoKey     => "Remove all points"],
       EditToggleMode     => [ 'F11'     => "Toggle drawings/points mode"],
@@ -1692,8 +1737,8 @@ sub opt_propcreate
 {
    my ( $w, $dlg, $nb, $nbpages) = @_;
    $w-> SUPER::opt_propcreate( $dlg, $nb, $nbpages);
-   $nb-> tabs( @{$nb-> tabs}, 'Calculations');
-   $nb-> insert_to_page( $nb-> pageCount,
+   $nb-> tabs( @{$nb-> tabs}, 'Calculations', 'Frame');
+   $nb-> insert_to_page( $nb-> pageCount - 2,
       [ Label =>
         text     => 'By default, only the area, the perimeter, the formfactor and centroid locations are calculated,though the program is perfectly capable of calculating all other parameters.  The reason for disabling the rest is that it normally takes significant amount of time to calculate them.',
         wordWrap => 1,
@@ -1756,6 +1801,38 @@ sub opt_propcreate
    $nbpages-> TopText-> rect( 5, $nbpages-> EqualBrightness-> top, $nbpages-> width - 5, $nbpages-> height - 5);
    $nbpages-> SigPce-> focusLink( $nbpages-> HolesPercent);
    $nbpages-> SigRot-> focusLink( $nbpages-> NumberOfRotations);
+   
+   my @fcnt = $nb-> insert_to_page( $nb-> pageCount - 1,
+      [ RadioGroup => 
+         origin => [ 5, 60],
+         size   => [ 200, 53],
+         name   => 'FrameColor',
+         text   => 'Frame color',
+      ], [ SpinEdit => 
+         origin => [5,5],
+         name   => 'FrameWidth',
+         size   => [100, 20],
+         min    => 0,
+         max    => 50,
+      ], [ Label => 
+         origin => [5, 35],
+         size   => [ 100, 20],
+         text   => 'Frame ~width',
+      ],
+   );
+   $fcnt[2]-> focusLink( $fcnt[1]);
+
+   $fcnt[0]-> insert( [ Radio => 
+      origin => [ 9, 5],
+      size   => [ 89, 28],
+      name   => 'FT_Black',
+      text   => 'B~lack',
+   ], [ Radio => 
+      origin => [ 102, 5],
+      size   => [ 89, 28],
+      name   => 'FT_White',
+      text   => 'W~hite',
+   ]);
 
    my $s1 = $nb-> insert_to_page( 1, Slider =>
        origin => [ 100, 10],
@@ -1824,6 +1901,8 @@ sub opt_proppush
    $widths[$ids{Remove}]     = $w-> {ini}-> {LW2};
    $dlg-> {page2}-> {widths} = \@widths;
    $nbpages-> LineWidth-> value( $widths[ $nbpages-> NameSel-> focusedItem]);
+   $nbpages-> FrameWidth-> value( $w-> {ini}-> {FrameWidth});
+   $nbpages-> FrameColor-> index( $w-> {ini}-> {FrameColor} ? 1 : 0);
 }
 
 sub opt_proppop
@@ -1845,6 +1924,12 @@ sub opt_proppop
       $w-> {ini}-> {LW2} = $dlg-> {page2}-> {widths}-> [$ids{Remove}];
       init_convex( $w->{ini}->{NumberOfRotations}) if
          $w->{ini}->{NumberOfRotations} != $dlg->{page3}->{NumberOfRotations};
+      my @v = ( $nbpages-> FrameWidth-> value, $nbpages-> FrameColor-> index ? 1 : 0);
+      if ( $v[0] != $w-> {ini}-> {FrameWidth} || $v[1] != $w-> {ini}-> {FrameColor}) {
+         $w-> {ini}-> {FrameWidth}  = $v[0]; 
+         $w-> {ini}-> {FrameColor}  = $v[1];
+         $w-> win_loadfile( $w-> {file});
+      }
    }
 }
 
@@ -2496,6 +2581,7 @@ splice( @{$$wedt[2]}, 0, 0,
    [],
    [ '-EditToggleMode' => "~Toggle points <-> drawings" => 'F11'=>'F11' => sub { $_[0]-> iv_cancelmode( $_[0]-> IV); $_[0]-> iv_togglemode( $_[0]-> IV)}],
    [],
+   [ 'EditInvertImage' => '~Invert image' => sub { $_[0]-> win_set_negative( $_[0]-> {ini}-> {InvertImage} ? 0 : 1); } ],
    [ '-EditValidate' => "~Validate contours" => 'Ctrl+Enter'=> km::Ctrl|kb::Enter =>
        sub { $_[0]-> win_validate(0) }],
    [ EditRecSetup => "Recognition ~setup"  => sub { $_[0]-> win_showrec; }, ],
@@ -2527,6 +2613,7 @@ $w-> visible(1);
 $w-> select;
 
 $w-> win_showrec if $w-> {ini}-> {RecWindowVisible};
+$w-> menu-> EditInvertImage-> check if $w-> {ini}-> {InvertImage};
 $w-> win_extwarn;
 
 run Prima;
