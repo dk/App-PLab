@@ -617,7 +617,7 @@ sub win_validate
    }
 }
 
-sub win_hack_of_the_day
+sub win_outline_convex_hull
 {
    my ($w) = @_;
 
@@ -1217,7 +1217,7 @@ sub opt_keys
       EditValidate       => [ km::Ctrl|kb::Enter => "Validate contours"], 
       EditRecSetup       => [ kb::NoKey  => "Display recognition setup dialog"],
       EditApplyContours  => [ km::Alt|kb::Enter => "Apply contours to document"],
-      EditHack           => [ kb::NoKey         => "Hack of the day"],
+      EditHack           => [ kb::NoKey         => "Outline convex hull of current drawing"],
       HelpAbout        => [ kb::NoKey,      'Standard about box'],
       HelpPlabApps     => [ kb::NoKey,      'Online PlabApps overview'],
       HelpContents     => [ kb::NoKey,      'Online Morphometry I overview'],
@@ -1305,6 +1305,7 @@ sub opt_calcdlg
 {
    my $w = $_[0];
    my $d = $w->{CalcOptDialog};
+   $w-> iv_cancelmode( $w-> IV);
    unless ( $d) {
       $d = Prima::Dialog-> create(
          size     => [ 320, 200],
@@ -1692,7 +1693,7 @@ sub opt_propcreate
    my ( $w, $dlg, $nb, $nbpages) = @_;
    $w-> SUPER::opt_propcreate( $dlg, $nb, $nbpages);
    $nb-> tabs( @{$nb-> tabs}, 'Calculations');
-   $nb-> insert_to_page( 3,
+   $nb-> insert_to_page( $nb-> pageCount,
       [ Label =>
         text     => 'By default, only the area, the perimeter, the formfactor and centroid locations are calculated,though the program is perfectly capable of calculating all other parameters.  The reason for disabling the rest is that it normally takes significant amount of time to calculate them.',
         wordWrap => 1,
@@ -2118,8 +2119,7 @@ sub IV_MouseDown
 
    {
       #starting freehand session
-      $self-> {transaction} = 1;
-      $self-> capture(1);
+      $w-> iv_entermode( $self, 1);
       $w-> pt_start;
       my ( $ax, $ay) = $self-> screen2point( $x, $y);
       $w-> pt_add( $ax, $ay);
@@ -2166,10 +2166,9 @@ sub IV_MouseMove
             $pix
          ) if $pix != cl::Invalid;
       }
-      return;
    }
    $w-> SUPER::IV_MouseMove( $self, $mod, $x, $y);
-   return unless $self-> eventFlag;
+   return unless $self-> eventFlag && $self-> {transaction};
    if ( $self-> {transaction} == 1) {
       my ( $x1, $y1) = $self-> point2screen( @{$w-> pt_lines->[-1]}[-2,-1]);
       $w-> pt_add( $self-> screen2point( $x, $y));
@@ -2243,9 +2242,9 @@ sub IV_Paint
 sub iv_cancelmode
 {
    my ( $w, $self) = @_;
-   return unless $self->{transaction};
+   my $t = $self->{transaction};
    $w-> SUPER::iv_cancelmode( $self);
-   $w-> pt_close();
+   $w-> pt_close() if $t;
 }
 
 sub iv_togglemode
@@ -2502,7 +2501,7 @@ splice( @{$$wedt[2]}, 0, 0,
    [ EditRecSetup => "Recognition ~setup"  => sub { $_[0]-> win_showrec; }, ],
    [ '-EditApplyContours' => "~Apply contours" => 'Alt+Enter'=> km::Alt|kb::Enter => q(win_applycontours)],
    [],
-   [ 'EditHack' => "~Hack of the day" => q(win_hack_of_the_day)],
+   [ 'EditHack' => "~Outline convex ~hull" => q(win_outline_convex_hull)],
 );
 
 my $w = MorphoWindow-> create(

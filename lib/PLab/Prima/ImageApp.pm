@@ -119,6 +119,108 @@ sub Files_MeasureItem
    $self-> clear_event;
 }
 
+package  Prima::TrDeviceBitmap;
+use vars qw(@ISA);
+@ISA = qw(Prima::DeviceBitmap);
+
+sub transform
+{
+   unless ( $#_) {
+      my @a = $_[0]-> SUPER::transform;
+      if ( $_[0]-> {override}) {
+         $a[$_] -= $_[0]-> {override}->[$_] for 0,1;
+      }
+      return @a;
+   }
+   my ( $self, $trx, $try) = @_;
+   if ( $self-> {override}) {
+      $trx += $self-> {override}-> [0];
+      $try += $self-> {override}-> [1];
+   }
+   $self-> SUPER::transform( $trx, $try);
+}
+
+sub clipRect
+{
+   unless ( $#_) {
+      my @a = $_[0]-> SUPER::clipRect;
+      if ( $_[0]-> {override}) {
+         $a[$_]   -= $_[0]-> {override}->[$_] for 0,1;
+         $a[$_+2] -= $_[0]-> {override}->[$_] for 0,1;
+      }
+      return @a;
+   }
+   my ( $self, $trx, $try, $tax, $tay) = @_;
+   if ( $self-> {override}) {
+      $trx += $self-> {override}-> [0];
+      $try += $self-> {override}-> [1];
+      $tax += $self-> {override}-> [0];
+      $tay += $self-> {override}-> [1];
+   }
+   $self-> SUPER::clipRect( $trx, $try, $tax, $tay);
+}
+
+package MagnifyingGlassWidget;
+use vars qw(@ISA);
+@ISA = qw(Prima::Widget);
+
+sub profile_default
+{
+   my $def = $_[ 0]-> SUPER::profile_default;
+   my %prf = (
+      width     => 154,
+      height    => 102,
+      syncPaint => 0,
+   );
+   @$def{keys %prf} = values %prf;
+   return $def;
+}
+
+sub on_create
+{
+   $_[0]-> {canvas} = Prima::TrDeviceBitmap-> create(
+      width  => 76,
+      height => 50,
+      backColor => $_[0]-> owner-> backColor,
+   );
+}
+
+sub on_paint
+{
+   $_[1]-> rectangle( 0, 0, 153, 101);
+   $_[1]-> stretch_image( 1, 1, 152, 100, $_[0]-> {canvas});
+}
+
+
+package TrImageViewer;
+use vars qw(@ISA);
+@ISA = qw(Prima::ImageViewer);
+
+sub invalidate_rect
+{
+   my ( $self, @r) = @_;
+   my $w = $self-> owner;
+   $w-> ivm_repaint( $self) if $w-> {magnify};
+   $self-> SUPER::invalidate_rect( @r);
+}
+
+sub end_paint
+{
+   my $self = $_[0];
+   $self-> SUPER::end_paint;
+   my $w = $self-> owner;
+   $w-> ivm_repaint( $self) if $w-> {magnify};
+}
+
+sub capture
+{
+   return $_[0]-> SUPER::capture unless $#_;
+   my ( $self, $capFlag, @rest) = @_;
+   $self-> owner-> iv_cancelmagnify( $self)
+      if !$capFlag && $self-> owner-> {magnify};
+   $self-> SUPER::capture( $capFlag, @rest);
+}
+
 package ImageAppWindow;
 use vars qw(@ISA %dlgProfile $ico $pointClickTolerance);
 @ISA = qw(Prima::Window);
@@ -242,13 +344,8 @@ sub on_keydown
          $self-> clear_event;
          return;
       }
-      if ( $iv-> {magnify}) {
-         $self-> iv_cancelmagnify( $iv);
-         $self-> clear_event;
-         return;
-      }
    }
-   $self-> clear_event if $iv-> {transaction} || $iv-> {magnify};
+   $self-> clear_event if $iv-> {transaction};
 }
 
 sub on_deactivate
@@ -358,6 +455,7 @@ sub win_inidefaults
       SerType      => 'Short',
       extSaveDir   => '',
       dirTimeout   => 120,
+      statusDelay  => 5,
       showHint     => 1,
    );
 }
@@ -480,6 +578,7 @@ sub win_openfile
          $d-> fileName( $fname);
       }
    }
+   $w-> iv_cancelmagnify( $w-> IV);
    return $w-> win_loadfile( $d->fileName) if $d-> execute;
    return 0;
 }
@@ -498,6 +597,7 @@ sub win_openserfile
         ['All files' => '*.*'],
       ]
    );
+   $w-> iv_cancelmode( $w-> IV);
    if ( $d-> execute) {
         $w-> win_loadfile( $d-> fileName);
    }
@@ -518,6 +618,7 @@ sub win_loadfile
    }
 
    my $self = $w-> IV;
+   $w-> iv_cancelmode( $self);
    $self-> {savePointer} = $self->pointer;
    $self-> pointer(cr::Wait);
    my $i = Prima::Image-> create;
@@ -543,7 +644,6 @@ sub win_loadfile
    $w-> win_extraschanged;
 
    $w-> IV-> repaint;
-   $w-> { magnify}-> IV-> image( $i) if defined $w-> { magnify};
 
    $w-> sb_text( "$file loaded OK");
    $self-> pointer($self-> {savePointer});
@@ -848,6 +948,20 @@ sub opt_propcreate
       },
    ]);
 
+   $nb-> insert_to_page( 0,
+   [ Label =>
+      origin => [ 230, 94],
+      size   => [ 135, 20],
+      text   => 'Status line delay (sec)',
+   ], [ SpinEdit => 
+      origin => [ 230, 72],
+      size   => [ 135, 20],
+      min    => 1,
+      max    => 60,
+      step   => 1,
+      name   => 'StatusDelay',
+   ]);
+
 # Colors and appearance
    $nb-> insert_to_page( 1, CheckBox =>
       origin => [ 10, 60],
@@ -935,7 +1049,7 @@ sub opt_propcreate
                $l-> backColor( cl::LightRed);
                $l-> color( cl::Yellow);
                $l-> text( "This key combination is already occupied by $_ and cannot be used");
-               $l-> insert( Timer => timeout => 100 => onTick => sub {
+               $l-> insert(  Timer => timeout => 100 => onTick => sub {
                   $l-> backColor( cl::Back);
                   $l-> color( cl::Fore);
                   $_[0]-> destroy;
@@ -986,6 +1100,7 @@ sub opt_proppush
    $nbpages-> UseDef-> checked( length($w->{ini}->{extSaveDir}) ? 0 : 1);
    $nbpages-> Path-> enabled(( length( $w->{ini}->{extSaveDir}) > 0) ? 1 : 0);
    $nbpages-> Path-> text( length($w->{ini}->{extSaveDir}) ? $w->{ini}->{extSaveDir} : '.');
+   $nbpages-> StatusDelay-> value( $w->{ini}->{statusDelay});
 # Colors
    $nbpages-> ShowHint-> checked( $w-> {ini}-> {showHint});
    my $optColors = $w-> opt_colors;
@@ -1040,6 +1155,7 @@ sub opt_proppop
          $w-> win_newextras;
          $w-> win_extraschanged;
       }
+      $w->{ini}->{statusDelay} = $nbpages-> StatusDelay-> value;
 # Hints
       $::application-> showHint( $w-> {ini}-> {showHint} = $nbpages-> ShowHint-> checked);
 # Keys 
@@ -1095,6 +1211,7 @@ sub opt_properties
    my $nbpages = $nb-> Notebook;
 
    $w-> opt_proppush( $dlg, $nb, $nbpages);
+   $w-> iv_cancelmode( $w-> IV);
    $w-> opt_proppop( $dlg, $nb, $nbpages, $dlg-> execute == cm::OK);
 }
 
@@ -1113,19 +1230,16 @@ sub IV_MouseDown
 
    $self-> clear_event, return if !$ImageApp::testing and !defined $w-> IV-> image;
 
-   # my $ms = $self-> get_mouse_state;
-   # my $lr = mb::Left | mb::Right;
-   # if ((( $ms & $lr) == $lr) or ( $ms & mb::Middle)) {
-   #    defined $self-> {magnify} ? iv_cancelmagnify( $self) : iv_magnify( $self),
-   #    return;
-   # }
-   # iv_cancelmagnify( $self);
-
+   my $ms = $self-> get_mouse_state;
+   my $lr = mb::Left | mb::Right;
+   if ((( $ms & $lr) == $lr) or ( $ms & mb::Middle)) {
+      defined $w-> {magnify} ? $w-> iv_cancelmagnify( $self) : $w-> iv_magnify( $self),
+      return;
+   }
 
    if (( $btn == mb::Right) and ( !defined $self->{transaction})) {
       $self-> {dragData} = [ $x, $y, $self-> deltas];
-      $self-> {transaction} = 3;
-      $self-> capture(1);
+      $w-> iv_entermode( $self, 3);
       $self-> {savePointer} = $self->pointer;
       $self-> pointer( $ico);
       $self-> clear_event;
@@ -1150,6 +1264,15 @@ sub IV_MouseUp
 sub IV_MouseMove
 {
    my ( $w, $self, $mod, $x, $y) = @_;
+   if ( $w-> {magnify} && !$w-> {magnifyLock}) {
+      $w-> {magnifyLock} = 1;
+      $w-> ivm_repaint( $self, $x, $y);
+      $w-> {magnify}-> origin( $x - 77, $y - 51);
+      $w-> {magnify}-> update_view;
+      $self-> update_view;
+      $w-> {magnifyLock} = 0;
+   }
+   
    return unless $self->{transaction};
    if ( $self-> {transaction} == 3) {
       my @dd = @{$self->{dragData}};
@@ -1159,9 +1282,25 @@ sub IV_MouseMove
    }
 }
 
+sub iv_entermode
+{
+   my ( $w, $self, $mode) = @_;
+   # $w-> iv_cancelmode( $self);
+   if ( $self->{transaction}) {
+      $self-> {transaction} = undef;
+      $self-> capture(0);
+      $self-> repaint;
+      $self-> pointer( $self-> {savePointer}) if $self-> {savePointer};
+      $self-> {savePointer} = undef;
+   }
+   $self-> {transaction} = $mode;
+   $self-> capture(1);
+}
+
 sub iv_cancelmode
 {
    my ( $w, $self) = @_;
+   $w-> iv_cancelmagnify( $self) if $w-> {magnify};
    return unless $self->{transaction};
    $self-> {transaction} = undef;
    $self-> capture(0);
@@ -1171,14 +1310,6 @@ sub iv_cancelmode
    $w-> sb_text("Action cancelled");
 }
 
-
-sub iv_cancelmagnify
-{
-   my ( $w, $self) = @_;
-   return unless $self->{magnify};
-   $self->{magnify}-> destroy;
-   $self->{magnify} = undef;
-}
 
 sub iv_zbestfit
 {
@@ -1198,37 +1329,41 @@ sub IV_Size
    $w-> iv_zbestfit( $self) if $self->{autoBestFit};
 }
 
+sub ivm_repaint
+{
+   my ( $w, $self) = @_;
+   return unless $w-> {magnify};
+   my $j = $w-> {magnify}-> {canvas};
+   $j-> {override} = [ 0, 0];
+   $j-> transform( 0, 0);
+   $j-> clear;
+   my @o = $self-> pointerPos;
+   $j-> {override} = [ -$o[0] + 38, -$o[1] + 25];
+   $j-> transform( 0, 0);
+   $w-> IV_Paint( $self, $j);
+   $j-> {override} = [ 0, 0];
+   $j-> transform( 0, 0);
+   $w-> {magnify}-> repaint;
+}
 
 sub iv_magnify
 {
    my ( $w, $self) = @_;
-   #return;
-   my ($x, $y) = ($self-> get_pointer_pos);
-   my ($xHalfSize, $yHalfSize) = ( 100, 70);
-   my $magn = $self-> insert( ImageViewer =>
-      rect          => [ $x - $xHalfSize - 1, $y - $yHalfSize - 1, $x + $xHalfSize + 1, $y + $yHalfSize + 1],
-      syncPaint     => 0,
-      image         => $self-> image,
-      zoom          => $self-> zoom * 2,
-      onCreate      => sub { $_[0]-> capture( 1);},
-      onDestroy     => sub { $_[0]-> capture( 0);},
-      onPaint       => sub {
-         my ( $self, $canvas) = @_;
-         $self-> on_paint( $canvas);
-         my @sz = $canvas-> size;
-         $canvas-> clipRect( 0, 0, @sz);
-         $canvas-> transform( 0, 0);
-         $canvas-> color( cl::Black);
-         $canvas-> rectangle( 0, 0, $sz[0]-1, $sz[1]-1);
-      },
-      onMouseMove   => sub {
-         my ( $left, $bottom) = ( $_[0]-> left, $_[0]-> bottom);
-         my ( $px, $py)       = ( $_[2], $_[3]);
-         $_[0]-> origin( $px + $left - $xHalfSize, $py + $bottom - $yHalfSize);
-         $self-> update_view;
-      },
-   );
-   $self-> {magnify} = $magn;
+   return if $w-> {magnify};
+   my $x = $self-> insert( 'MagnifyingGlassWidget' );
+   $w-> ivm_repaint( $self, $self-> pointerPos);
+   $x-> focus;
+   $w-> IV-> capture(1);
+   $w-> {magnify} = $x;
+}
+
+sub iv_cancelmagnify
+{
+   my ( $w, $self) = @_;
+   return unless $w->{magnify};
+   $w->{magnify}-> destroy;
+   $w->{magnify} = undef;
+   $w-> IV-> capture(0);
 }
 
 # IV_END
@@ -1245,7 +1380,6 @@ sub sb_text
    );
    $self-> update_view;
    $self-> { timer} = $self-> insert( Timer =>
-      timeout => 3000,
       onTick  => sub {
          $_[0]-> stop;
          $_[0]-> owner-> set(
@@ -1255,6 +1389,7 @@ sub sb_text
       },
    ) unless $self-> { timer};
    $self-> { timer}-> stop;
+   $self-> { timer}-> timeout(  $w-> {ini}-> {statusDelay} * 1000);
    $self-> { timer}-> start;
 }
 
@@ -1343,13 +1478,13 @@ sub init
    );
 
 
-   $w-> insert( ImageViewer =>
+   $w-> insert( TrImageViewer =>
       name     => "IV",
       rect     => [ 2, $w-> StatusBar-> height + 2, $x - 2, $y - $w-> ToolBar-> height - 8],
       hScroll  => 1,
       vScroll  => 1,
       growMode => gm::Client,
-      delegations => [qw(Size MouseUp MouseDown MouseMove)],
+      delegations => [qw(Size MouseUp MouseDown MouseMove Paint)],
       widgetClass => wc::Window,
    );
    return %profile;

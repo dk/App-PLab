@@ -755,8 +755,7 @@ sub IV_MouseDown
    $w-> win_untemp(1);
 
    if ( $btn == mb::Right && $mod & km::Shift && !$self->{transaction} && $w->{file}) {
-      $self-> {transaction} = 4;
-      $self-> capture( 1);
+      $w-> iv_entermode( $self, 4);
       $self-> {xorData} = [ $x, $y, $x, $y];
       $w-> IV_xorrect( $self);
       $self-> clear_event;
@@ -766,6 +765,7 @@ sub IV_MouseDown
 
    if ( $btn == mb::Right && !$self->{transaction} && defined $w-> rpt_is( $self-> screen2point( $x, $y))) {
       $w-> {lastPopupPoint} = [$self-> screen2point( $x, $y)];
+      $w-> iv_cancelmode( $self);
       $self-> PointPopup-> popup( $self-> pointerPos);
       $self-> clear_event;
       return;
@@ -832,7 +832,6 @@ sub IV_MouseMove
       $self-> {xorData}-> [3] = $y;
       $w-> IV_xorrect( $self);
       $self-> clear_event;
-      return;
    }
 
    $w-> SUPER::IV_MouseMove( $self, $mod, $x, $y);
@@ -930,6 +929,10 @@ $w-> visible(1);
 $w-> select;
 
 $w-> win_extwarn;
+
+
+package main;
+
 
 run Prima;
 

@@ -91,6 +91,7 @@ sub on_mousedown
       $me-> select;
       if ( $btn == mb::Right) {
          $w-> FigurePopup-> popup( $w-> pointerPos);
+         $w-> iv_cancelmode( $self);
          return 1;
       }
 
@@ -373,8 +374,7 @@ sub open_transaction
 {
    my ( $w, $iv) = ( $_[0]->{owner}, $_[0]-> {IV});
    my ( $me, $mode, $x, $y, $ax, $ay) = @_;
-   $iv-> {transaction} = $mode;
-   $iv-> capture(1);
+   $w-> iv_entermode( $iv, $mode);
    my @r = @{$_[0]-> {bounds}};
    $me-> repaint;
    $iv-> update_view;
@@ -585,6 +585,7 @@ sub win_printframe
    if ( $usedlg) {
       my $d = $w-> {printerDialog};
       $w-> {printerDialog} = $d = Prima::PrintSetupDialog-> create( owner => $w) unless $d;
+      $w-> iv_cancelmode( $w-> IV);
       return unless $d-> execute;
    }
    my $p = $::application-> get_printer;
@@ -863,6 +864,7 @@ sub fig_propdialog
    $d-> centered(1);
    $d-> Threshold-> value( $me-> {threshold});
    $d-> Threshold-> notify(q(PostMessage)); # force changes
+   $w-> iv_cancelmode( $w-> IV);
    if ( $d-> execute == cm::OK) {
       $me-> {threshold} = $d-> Threshold-> value;
    }
@@ -942,6 +944,7 @@ sub IV_MouseDown
 
       if ( $btn == mb::Left) {
          $self-> {transaction} = tran::init;
+         $w-> iv_cancelmagnify( $self);
          $self-> capture( 1);
          $self-> {anchor} = [ $x, $y];
          $self-> {xorData} = [ $x, $y, $x, $y, $x, $y, $x, $y];

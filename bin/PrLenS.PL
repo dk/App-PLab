@@ -282,7 +282,7 @@ sub save_info
       $cc =~ tr{\ }{\_};
       
       my $fnx = '%0' . $$w{cypherMask} . 'd';
-      $fnx = sprintf $fnx, $w-> {fileNum};
+      $fnx = sprintf $fnx, ( $w-> {fileNum} || 0);
       $info-> {$fnx} = scalar @{$w-> {cells}} . " " . scalar @{$w-> {processes}} . " " .
                         "${fnx}::" . $cc . "::" . $pp . "::" . $bb . "\n";
    }
@@ -533,6 +533,7 @@ sub initiate_draw_mode
    return unless ( $w->{ markState} == 2) && ( ! $w->{ binfo}->{ drawMode});
    $w->{ binfo}->{ drawMode} = 1;
    $w->{ binfo}->{ removeLastPoint} = 1;
+   $w-> iv_cancelmagnify( $self);
    $self-> capture(1);
    $w->{ binfo}->{ branchNumber} = scalar @{ $w->{ branches}};
    $w->{ branches}->[ $w->{ binfo}->{ branchNumber}]->[ 0] = [ $self-> screen2point( $x, $y)];
@@ -811,6 +812,7 @@ sub IV_MouseClick
       return;
    }
 
+   return unless $btn == mb::Left;
    return unless defined $w-> {markState};
    my ( $ax, $ay) = $self-> screen2point( $x, $y);
    return unless ( $ax >= 0 && $ay >= 0 && $ax < $w->{IVx} && $ay < $w->{IVy});
@@ -821,16 +823,14 @@ sub IV_MouseClick
    return unless defined $ary;
 
    if ( $w->{ markState} == 2) {
-      if ( $btn == mb::Left) {
-         if ( ! $w->{ binfo}->{ drawMode}) {
-            $w-> initiate_draw_mode( $x, $y);
-         }
-
-         my ( $bn) = $w->{ binfo}->{ branchNumber};
-         push @{ $w->{ branches}->[ $bn]}, [ int($ax), int($ay)];
-         $w->{ binfo}->{ removeLastPoint} = 1;
-         $w-> modified(1);
+      if ( ! $w->{ binfo}->{ drawMode}) {
+         $w-> initiate_draw_mode( $x, $y);
       }
+
+      my ( $bn) = $w->{ binfo}->{ branchNumber};
+      push @{ $w->{ branches}->[ $bn]}, [ int($ax), int($ay)];
+      $w->{ binfo}->{ removeLastPoint} = 1;
+      $w-> modified(1);
    }
    else {
       my ($i,$x1,$x2,$y1,$y2);
@@ -904,7 +904,8 @@ sub IV_Paint
 
    return unless $image;
    
-   my $z = $self-> zoom;
+   my $z  = $self-> zoom;
+   my $zp = ( $z < 1) ? 4 : $z * 4;
    $canvas-> transform( $self-> point2screen( 0, 0));
    my ($x, $y, $iw, $ih) = ( $self-> size, $image-> size);
    my $dx = sprintf( '%d', $iw / 20);
@@ -933,7 +934,7 @@ sub IV_Paint
    
    foreach (@{$w-> {cells}}) {
       my ($x, $y) = split;
-      $canvas-> fill_ellipse( $x * $z, $y * $z, 4, 4);
+      $canvas-> fill_ellipse( $x * $z, $y * $z, $zp, $zp);
    }
    if ( $w-> {ini}-> {ShowExtras}) {
       foreach (@{$w-> {exCells}}) {
@@ -949,7 +950,7 @@ sub IV_Paint
    foreach (@{$w-> {processes}})
    {
       my ($x, $y) = split;
-      $canvas-> fill_ellipse( $x * $z, $y * $z, 4 * $z, 4 * $z);
+      $canvas-> fill_ellipse( $x * $z, $y * $z, $zp, $zp);
    }
    if ( $w-> {ini}-> {ShowExtras}) {
       foreach (@{$w-> {exProcesses}}) {
