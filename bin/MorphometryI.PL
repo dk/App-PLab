@@ -2301,7 +2301,7 @@ sub IV_Paint
    my ( $w, $self, $canvas) = @_;
    $self-> on_paint( $canvas);
    my $wl = $w-> {lineStorage};
-   $canvas-> transform( $self-> point2screen( 0, 0));
+   $canvas-> translate( $self-> point2screen( 0, 0));
    my $z = $self-> zoom;
    my $p = ( 6 * $z < 1) ? 1 : ( 6 * $z);
    if ( defined $wl) {

@@ -844,7 +844,7 @@ sub IV_Paint
    my $wl = $w-> {points};
    my $z = $self-> zoom;
    my $p = ( 6 * $z < 1) ? 1 : ( 6 * $z);
-   $canvas-> transform( $self-> point2screen( 0, 0));
+   $canvas-> translate( $self-> point2screen( 0, 0));
    if ( defined $wl) {
       my $i;
       $canvas-> color( $w-> {ini}->{Color_Points});

@@ -123,10 +123,10 @@ package  Prima::TrDeviceBitmap;
 use vars qw(@ISA);
 @ISA = qw(Prima::DeviceBitmap);
 
-sub transform
+sub translate
 {
    unless ( $#_) {
-      my @a = $_[0]-> SUPER::transform;
+      my @a = $_[0]-> SUPER::translate;
       if ( $_[0]-> {override}) {
          $a[$_] -= $_[0]-> {override}->[$_] for 0,1;
       }
@@ -137,7 +137,7 @@ sub transform
       $trx += $self-> {override}-> [0];
       $try += $self-> {override}-> [1];
    }
-   $self-> SUPER::transform( $trx, $try);
+   $self-> SUPER::translate( $trx, $try);
 }
 
 sub clipRect
@@ -1393,14 +1393,14 @@ sub ivm_repaint
    return unless $w-> {magnify};
    my $j = $w-> {magnify}-> {canvas};
    $j-> {override} = [ 0, 0];
-   $j-> transform( 0, 0);
+   $j-> translate( 0, 0);
    $j-> clear;
    my @o = $self-> pointerPos;
    $j-> {override} = [ -$o[0] + 38, -$o[1] + 25];
-   $j-> transform( 0, 0);
+   $j-> translate( 0, 0);
    $w-> IV_Paint( $self, $j);
    $j-> {override} = [ 0, 0];
-   $j-> transform( 0, 0);
+   $j-> translate( 0, 0);
    $w-> {magnify}-> repaint;
 }
 

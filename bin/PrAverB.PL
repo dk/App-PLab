@@ -907,7 +907,7 @@ sub fig_getspots
    $imask-> backColor( cl::Black);
    $imask-> clear;
    $imask-> color( cl::White);
-   $imask-> transform( -$b[0], -$b[1]);
+   $imask-> translate( -$b[0], -$b[1]);
    my @p = @{$me-> {rect}};
    $imask-> fillpoly( [@p, @p[0,1]]);
    $imask-> end_paint;
@@ -1063,7 +1063,7 @@ sub IV_Paint
    my $r = $w-> {rects};
    my $z = $self-> zoom;
    $canvas-> color( $w-> {ini}->{Color_AreaBorder});
-   $canvas-> transform(0,0);
+   $canvas-> translate(0,0);
    for ( @$r) {
       $_-> on_paint( $w, $self, $canvas);
    }

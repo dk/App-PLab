@@ -15,17 +15,6 @@ $Config{'startperl'} -w
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
-
-#!/usr/local/bin/perl58 -w
-
-#!/usr/local/bin/perl58 -w
-
-#!/usr/local/bin/perl58 -w
-
-#!/usr/local/bin/perl58 -w
-
-#!/usr/bin/perl -w
-
 #!/usr/bin/perl -w
 
 use strict;
@@ -1642,7 +1631,7 @@ sub IV_Paint
    
    my $z  = $self-> zoom;
    my $zp = ( $z < 1) ? 4 : $z * 4;
-   $canvas-> transform( $self-> point2screen( 0, 0));
+   $canvas-> translate( $self-> point2screen( 0, 0));
    my ($x, $y, $iw, $ih) = ( $self-> size, $image-> size);
    my $dx = sprintf( '%d', $iw / 20);
    my $dy = sprintf( '%d', $ih / 20);
