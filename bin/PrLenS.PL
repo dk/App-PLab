@@ -54,10 +54,9 @@ sub win_inidefaults
       C_min_area         => 200,
       C_min_rank         => 1,
       C_max_index        => 255,
-      C_min_index        => 60,
+      C_min_index        => 0,
       C_dilations        => 2,
-      C_erosions         => 1,
-      C_cell_radius      => 25,
+      C_branch_radius    => 3,
    );
 }
 
@@ -804,9 +803,9 @@ sub process
    $w-> win_rec_updatevalues;
    my $orgi = $w-> win_entersubplace;
 
-   my ( $minUF, $maxUF, $stepUF, $min_area, $min_rank, $max_index, $min_index, $dilate, $erode, $rad) = 
+   my ( $minUF, $maxUF, $stepUF, $min_area, $min_rank, $max_index, $min_index, $dilate, $rad) = 
       map { $w-> {ini}-> {$_}} qw(
-        C_minUF C_maxUF C_stepUF C_min_area C_min_rank C_max_index C_min_index C_dilations C_erosions C_cell_radius
+        C_minUF C_maxUF C_stepUF C_min_area C_min_rank C_max_index C_min_index C_dilations C_branch_radius
    );
 
    my $i = $orgi-> dup;
@@ -814,8 +813,16 @@ sub process
    $i = IPA::Morphology::dilate( $i) while $dd--;
    return $w-> win_leavesubplace( $i) if $mode == 1;
 
-   my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 2 * 3));
+   my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 8));
    $pct -= $step;
+
+   my $rect = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::BW,
+      color => cl::Black, backColor => cl::White, conversion => ict::None);
+   $rect-> begin_paint;
+   $rect-> clear;
+   $rect-> rectangle( 0, 0, $rect-> width - 1, $rect-> height - 1);
+   $rect-> end_paint;
+   $rect-> type( im::Byte);
 
    # union find
    my @mp = map { 
@@ -848,6 +855,7 @@ sub process
 #     }
       $img = IPA::Point::remap( $img, lookup => \@map);
       $img = IPA::Global::fill_holes( $img);
+      $img-> put_image_indirect( $rect, (0) x 4, $img-> size, $rect-> size, rop::AndPut); 
       $img = IPA::Global::area_filter( $img, minArea => $min_area, maxArea => $sz);
       $cou = [map { IPA::Region::contour2region($_)} @{IPA::Global::identify_contours( $img, edgeSize => 1)}];
       push @co, $cou;
@@ -855,7 +863,6 @@ sub process
 
    
    # Contour link
-
    my $l;
    my @kgraph;
    for ( $l = 0; $l < @co - 1; $l++) { # frame cycle
@@ -891,7 +898,6 @@ sub process
    }
    
    
-#  $w-> sb_text( "Line up contours");
    $w-> sb_text( sprintf( "%d%% ( line up contours )", $pct += $step));
    for ( $l = @kgraph - 2; $l >= 0; $l--) { # layer cycle from top to bottom
       for ( @{$kgraph[ $l]}) { # every contour hash in the layer
@@ -914,7 +920,6 @@ sub process
       }
    }
    
-   # $w-> sb_text( "Finalizing output...");
    $w-> sb_text( sprintf( "%d%% ( bulk mask )", $pct += $step));
    my $kk; 
    $kk = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::BW);
@@ -959,7 +964,7 @@ sub process
    $kk = IPA::Morphology::erode( $kk) while $dd--;
    $kk = IPA::Global::area_filter( $kk, minArea => $min_area, maxArea => $sz);
    return $w-> win_leavesubplace( $kk) if $mode == 2;
-   $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
+   $w-> sb_text( sprintf( "%d%% ( find branches )", $pct += $step));
 
    sub weigh_center
    {
@@ -975,8 +980,6 @@ sub process
       return ( $a[0]->[scalar(@{$a[0]})/2], $a[1]->[scalar(@{$a[1]})/2]);
    }
 
-   # the contours are up - finding 'centroids' and doing stereology
-   my $conto = IPA::Global::identify_contours( $kk);
    my $mask  = $kk-> dup;
    my @centroids;
    my @processes;
@@ -993,77 +996,77 @@ sub process
       return 0;
    }
 
-   if ( $mode == 3) {
-      $kk-> begin_paint;
-      $kk-> color(0);
-      $kk-> bar( 0, 0, $kk-> size);
-      $kk-> rop( rop::OrPut);
-   }
-
    my ( $ww, $hh) = $mask-> size;
    my $ls = int(( $ww * 8 + 31) / 32) * 4;
    my $dy = int($hh / 20);
    my $szy = int(($hh - 2 * $dy) / $w-> {ini}-> {nLines});
-   
-   for ( @$conto) {
-      next if excluded( $_, @excl);
-   
-      $mask-> begin_paint;
-      $mask-> set( color => cl::White, backColor => cl::Black);
-      $mask-> clear;
-      $mask-> fillpoly( $_);
-      $mask-> end_paint;
 
-      $mask-> type( im::Byte);
-      $dd = $erode;
-      $mask = IPA::Morphology::erode( $mask) while $dd--;
-     
-      my $z = IPA::Point::mask( $mask, test => 255, match => $orgi, mismatch => 0);
-      my @h = IPA::Misc::histogram( $z);
-      my ( $i, $mean) = (0,0);
-      $mean += $i++ * $_ for @h;
-      $i = 0;
-      shift @h;
-      $i += $_ for @h;
-      $mean /= ( $i ? $i : 1);
-
-      my ( $x, $y) = weigh_center( $_);
-      if ( $mode == 3) {
-         $kk-> color(($mean < $min_index || $mean > $max_index) ? cl::LightRed : cl::LightGreen);
-         $kk-> put_image( 0,0,$mask);
-         $kk-> text_out( sprintf("%d", $mean), $x+5, $y+5);
-      }
-      
-      next if $mean < $min_index || $mean > $max_index;
-      push @centroids, "$x $y";
-
-      $mask = IPA::Morphology::thinning( $mask);
-      my $d = $mask-> data;
-      my $mm = 0;
-      for ( $i = 1; $i <= $w-> {ini}-> {nLines}; $i++) {
-         my $ay = $dy + $i * $szy;
-         unless ( $mm) {
-            $mm = 1, next if $ay > $y - $rad && $ay < $y + $rad;
-         }
-         my $scanline = substr( $d, $ls * $ay, $ww);
-         my $ax = 0;
-         my @localp;
-         $scanline =~ s/(?:(\0+)|(.))/push(@localp, $ax) if $2; $ax += length($1||$2); ' '/xeg;
-         my $prev = -$rad * 2;
-         push @processes, map {"$_ $ay"} grep {
-            my $yes = ( $prev + $rad < $_);
-            $prev = $_;
-            $yes;
-         } grep { 
-            $mm ? 1 : ( $mm = 1, $_ <= $x - $rad || $_ >= $x + $rad )
-         } @localp;
-      }
+   # last stage processing
+   my $lines = IPA::Morphology::thinning( $mask); 
+   $i = $orgi-> dup;
+   # threshold the enhanced image 
+   $i-> rop( rop::AndPut);
+   $i-> put_image( 0, 0, $mask);
+   my ($j,$max,$maxj) = (0,0,0);
+   for ( $j = $max_index; $j >= $min_index; $j -= 10) {
+      my $ix = IPA::Point::threshold( $i, minvalue => $j);
+      $ix = IPA::Global::fill_holes( $ix);
+      $ix = IPA::Global::area_filter( $ix, minArea => $min_area);
+      my $count = scalar @{IPA::Global::identify_contours( $ix)};
+      $maxj = $j, $max = $count if $max <= $count;
    }
 
+   $i = IPA::Point::threshold( $i, minvalue => $maxj);
+   $i = IPA::Global::fill_holes( $i);
+   $i = IPA::Global::area_filter( $i, minArea => $min_area);
+   $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
+
+   $dd = $rad;
+   $i = IPA::Morphology::erode( $i) while $dd--;
+   $i = IPA::Global::area_filter( $i, minArea => $min_area);
+   $dd = int($rad / 2);
+   if ( $dd) {
+      $i = IPA::Morphology::dilate( $i) while $dd--;
+   }
+   my $centers = IPA::Morphology::dilate( $i);
+   $lines-> rop( rop::NotSrcAnd);
+   $lines-> put_image( 0, 0, $i);
+   $centers-> rop( rop::NotSrcAnd);
+   $centers-> put_image( 0,0, $i);
+   $w-> sb_text( sprintf( "%d%% ( finalize )", $pct += $step));
+
    if ( $mode == 3) {
-      $kk-> end_paint;
-      $w-> win_leavesubplace( $kk);
+      $i = $orgi-> dup;
+      $i = IPA::Point::remap( $i, lookup => [ 2, 2, ( 2 .. 255)]);
+      $i-> rop( rop::NotSrcAnd);
+      $i-> put_image( 0, 0, $lines);
+      $i = IPA::Point::remap( $i, lookup => [ 1, ( 1 .. 255)]);
+      $i-> rop( rop::NotSrcAnd);
+      $i-> put_image( 0, 0, $centers);
+      $i-> type( im::bpp8);
+      $i-> palette([0,0,255,0,255,0]);
+      $w-> win_leavesubplace( $i);
       return;
+   }
+
+   for( @{IPA::Global::identify_contours( $centers)}) {
+      my ( $x, $y) = weigh_center( $_);
+      push @centroids, "$x $y";
+   }
+
+   my $d = $lines-> data;
+   for ( $i = 1; $i <= $w-> {ini}-> {nLines}; $i++) {
+      my $ay = $dy + $i * $szy;
+      my $scanline = substr( $d, $ls * $ay, $ww);
+      my $ax = 0;
+      my @localp;
+      $scanline =~ s/(?:(\0+)|(.))/push(@localp, $ax) if $2; $ax += length($1||$2); ' '/xeg;
+      my $prev = -$rad * 2;
+      push @processes, map {"$_ $ay"} grep {
+         my $yes = ( $prev + $rad < $_);
+         $prev = $_;
+         $yes;
+      } @localp;
    }
 
    $w-> {totalCells} -= $w-> {nCells};
@@ -1073,7 +1076,6 @@ sub process
    $w-> {processes} = \@processes;
    $w-> {nProcesses} = scalar( @processes);
    
-
    $w-> IV-> repaint;
    $w-> modified(1);
    $w-> update_state;
@@ -1159,8 +1161,7 @@ sub win_rec_updatevalues
    $i-> {C_max_index} = $r-> FLT-> Max-> value;
    $i-> {C_min_area}  = $r-> Area-> value;
    $i-> {C_dilations} = $r-> Dilations-> value;
-   $i-> {C_erosions}  = $r-> Erosions-> value;
-   $i-> {C_cell_radius}  = $r-> Radius-> value;
+   $i-> {C_branch_radius}  = $r-> Radius-> value;
 }
 
 sub win_showrec
@@ -1191,8 +1192,7 @@ sub win_showrec
      $r-> FLT-> Max-> value ($i-> {C_max_index});
      $r-> Area-> value      ( $i-> {C_min_area});
      $r-> Dilations-> value ($i-> {C_dilations});
-     $r-> Erosions-> value  ( $i-> {C_erosions});
-     $r-> Radius-> value  ( $i-> {C_cell_radius});
+     $r-> Radius-> value  ( $i-> {C_branch_radius});
      $w-> win_framechanged;
   }
   $w-> {recWindow}-> bring_to_front;
