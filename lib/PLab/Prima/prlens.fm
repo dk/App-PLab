@@ -1,0 +1,347 @@
+# VBForm version file=1.1 builder=0.1
+# [preload] 
+sub
+{
+	return (
+	'Label7' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 4, 352],
+			name => 'Label7',
+			owner => 'Form1',
+			size => [ 72, 22],
+			text => '~Dilations:',
+			focusLink => 'Dilations',
+	}},
+	'Form1' => {
+		class   => 'Prima::Window',
+		module  => 'Prima::Classes',
+		parent => 1,
+		profile => {
+			width => 176,
+			name => 'Form1',
+			text => 'Recognition setup',
+			bottom => 370,
+			originDontCare => 0,
+			origin => [ 523, 370],
+			height => 376,
+			borderIcons => bi::SystemMenu | bi::Minimize | bi::TitleBar,
+			left => 523,
+			sizeDontCare => 0,
+			size => [ 176, 376],
+			onSetup => Prima::VB::VBLoader::GO_SUB('my $self = $_[0];                
+my $i = $self-> PD1-> image;
+$self-> PD2-> image( $i);
+$self-> PD3-> image( $i);   '),
+			borderStyle => bs::Single,
+	}},
+	'Dilations' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			name => 'Dilations',
+			tabOrder => 4,
+			onChange => Prima::VB::VBLoader::GO_SUB('my $self = $_[0];'),
+			hint => 'Amount of grayscale dilations
+before the processing start',
+			min => 0,
+			max => 10,
+			origin => [ 80, 352],
+			owner => 'Form1',
+			size => [ 60, 22],
+	}},
+	'Label_From' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 8, 64],
+			name => 'Label_From',
+			owner => 'UF',
+			size => [ 44, 22],
+			text => '~From:',
+			focusLink => 'From',
+	}},
+	'UF' => {
+		class   => 'Prima::GroupBox',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 4, 228],
+			name => 'UF',
+			owner => 'Form1',
+			size => [ 168, 116],
+			text => 'Union find',
+	}},
+	'From' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 56, 68],
+			name => 'From',
+			owner => 'UF',
+			hint => 'Start of \'union find\' algorithm 
+ threshold multiplied by Step value',
+			tabOrder => 4,
+			size => [ 100, 22],
+			min => 1,
+	}},
+	'FLT' => {
+		class   => 'Prima::GroupBox',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 4, 76],
+			name => 'FLT',
+			owner => 'Form1',
+			size => [ 168, 88],
+			text => 'Mean filter range',
+	}},
+	'Label_To' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 8, 36],
+			name => 'Label_To',
+			owner => 'UF',
+			size => [ 44, 22],
+			text => '~To:',
+			focusLink => 'To',
+	}},
+	'To' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 56, 40],
+			name => 'To',
+			size => [ 100, 22],
+			hint => ' End of \'union find\' algorithm 
+ threshold multiplied by Step value
+',
+			tabOrder => 3,
+			owner => 'UF',
+			min => 1,
+	}},
+	'Label_Step' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 8, 8],
+			name => 'Label_Step',
+			owner => 'UF',
+			size => [ 44, 22],
+			text => '~Step:',
+			focusLink => 'Step',
+	}},
+	'Step' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 56, 12],
+			name => 'Step',
+			owner => 'UF',
+			tabOrder => 2,
+			hint => 'Union find multiplying factor',
+			size => [ 100, 22],
+			min => 1,
+	}},
+	'Label_Max' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 8, 40],
+			name => 'Label_Max',
+			owner => 'FLT',
+			hint => 'Upper limit of object mean brightness',
+			size => [ 44, 22],
+			text => 'Ma~x:',
+			focusLink => 'Max',
+	}},
+	'Max' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			name => 'Max',
+			hint => 'Maximal allowed contour mean
+brightness value',
+			tabOrder => 4,
+			min => 0,
+			max => 255,
+			origin => [ 56, 44],
+			size => [ 100, 22],
+			owner => 'FLT',
+			value => 255,
+	}},
+	'Label_Min' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 8, 8],
+			name => 'Label_Min',
+			owner => 'FLT',
+			hint => 'Lower limit of object mean brightness',
+			size => [ 44, 22],
+			text => 'M~in:',
+			focusLink => 'Min',
+	}},
+	'Min' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 56, 12],
+			name => 'Min',
+			size => [ 100, 22],
+			owner => 'FLT',
+			hint => 'Minimal allowed contour mean
+brightness value
+',
+			tabOrder => 4,
+			min => 0,
+			max => 255,
+	}},
+	'Label_Area' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 4, 200],
+			name => 'Label_Area',
+			owner => 'Form1',
+			size => [ 72, 22],
+			text => 'Min.~area:',
+			focusLink => 'Area',
+	}},
+	'Area' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			name => 'Area',
+			hint => 'Minimal area that a contour
+required to have in order to count
+as an object',
+			tabOrder => 5,
+			min => 0,
+			max => 1000000000,
+			origin => [ 80, 200],
+			size => [ 60, 22],
+			owner => 'Form1',
+	}},
+	'Label8' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 4, 168],
+			name => 'Label8',
+			owner => 'Form1',
+			size => [ 72, 22],
+			text => '~Erosions:',
+			focusLink => 'Erosions',
+	}},
+	'Erosions' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 80, 168],
+			name => 'Erosions',
+			size => [ 60, 22],
+			owner => 'Form1',
+			hint => 'Amount of erosions for every contour',
+			onChange => Prima::VB::VBLoader::GO_SUB('my $self = $_[0];'),
+			tabOrder => 4,
+			min => 0,
+			max => 10,
+	}},
+	'PD1' => {
+		class   => 'Prima::SpeedButton',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 144, 352],
+			name => 'PD1',
+			owner => 'Form1',
+			hint => 'Perform dilations only',
+			image => Prima::Icon->create( width=>16, height=>16, type => im::bpp1, 
+palette => [ 0,0,0,0,0,0],
+ data => 
+"\x01\x00\x00\x00A\x08\x00\x00\!\x10\x00\x00\x10 \x00\x00\x07\xc0\x00\x00".
+"\x080\x00\x001\x88\x00\x00C\xc0\x00\x00\x03\xc4\x00\x00\!\x88\x00\x00".
+"\x18p\x00\x00\x07\x80\x00\x00\x10\x10\x00\x00\!\x08\x00\x00A\x04\x00\x00".
+"\x01\x00\x00\x00".
+''),
+			size => [ 22, 22],
+	}},
+	'PD2' => {
+		class   => 'Prima::SpeedButton',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 144, 200],
+			name => 'PD2',
+			owner => 'Form1',
+			hint => 'Find gross contours',
+			size => [ 22, 22],
+	}},
+	'PD3' => {
+		class   => 'Prima::SpeedButton',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 144, 168],
+			name => 'PD3',
+			owner => 'Form1',
+			hint => 'Full processing - display resulting image',
+			size => [ 22, 22],
+	}},
+	'ApplyBtn' => {
+		class   => 'Prima::Button',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 4, 4],
+			name => 'ApplyBtn',
+			owner => 'Form1',
+			hint => 'Apply object and process section points',
+			size => [ 80, 36],
+			default => 1,
+			text => '~Apply',
+	}},
+	'RestoreBtn' => {
+		class   => 'Prima::Button',
+		module  => 'Prima::Buttons',
+		profile => {
+			origin => [ 88, 4],
+			name => 'RestoreBtn',
+			owner => 'Form1',
+			hint => 'Revert to the original image',
+			size => [ 80, 36],
+			text => '~Restore',
+	}},
+	'Label9' => {
+		class   => 'Prima::Label',
+		module  => 'Prima::Label',
+		siblings => [qw(focusLink)],
+		profile => {
+			origin => [ 4, 48],
+			name => 'Label9',
+			owner => 'Form1',
+			size => [ 100, 22],
+			hint => 'Approximate cell radius ',
+			text => '~Cell radius:',
+			focusLink => 'Radius',
+	}},
+	'Radius' => {
+		class   => 'Prima::SpinEdit',
+		module  => 'Prima::Sliders',
+		profile => {
+			origin => [ 108, 48],
+			name => 'Radius',
+			owner => 'Form1',
+			tabOrder => 5,
+			hint => 'Minimal allowed object area',
+			size => [ 60, 22],
+			min => 1,
+			max => 256,
+	}},
+	);
+}
