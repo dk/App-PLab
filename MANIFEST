@@ -1,0 +1,12 @@
+Changes
+lib/PLab/Prima/ImageApp.pm
+lib/PLab/Prima/Calibrations.pm
+lib/PLab/Prima/ImageAppGlyphs.pm
+lib/PLab/Prima/ImageApp.gif
+bin/ManCen.PL
+bin/MorphometryI.PL
+bin/PrLenS.PL
+bin/PrAverB.PL
+MANIFEST
+Makefile.PL
+test.pl
