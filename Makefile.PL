@@ -13,7 +13,7 @@ WriteMakefile(
 		      DIST_DEFAULT => 'all tardist',
 		     },
 
-    'DISTNAME'     => 'PLab-Prima-IPA-tools',
+    'DISTNAME'     => 'PLabApps',
     ($] >= 5.005 ?
         (
             ABSTRACT => 'Internal PLab image processing tools',
