@@ -3,8 +3,8 @@ use File::Basename qw(basename dirname);
 chdir(dirname($0));
 ($file = basename($0)) =~ s/\.PL$//;
 $file =~ s/\.pl$//
-	if ($Config{'osname'} eq 'VMS' or
-	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+        if ($Config{'osname'} eq 'VMS' or
+            $Config{'osname'} eq 'OS2');  # "case-forgiving"
 open OUT,">$file" or die "Can't create $file: $!";
 chmod(0755, $file);
 print "Extracting $file (with variable substitutions)\n";
@@ -15,6 +15,7 @@ $Config{'startperl'} -w
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
+
 
 use strict;
 use Prima;
@@ -808,9 +809,14 @@ sub process
         C_minUF C_maxUF C_stepUF C_min_area C_min_rank C_max_index C_min_index C_dilations C_branch_radius
    );
 
+   my $maxArea = $orgi-> width * $orgi-> height / 4;
    my $i = $orgi-> dup;
    my $dd = $dilate;
-   $i = IPA::Morphology::dilate( $i) while $dd--;
+   $dd = int($i-> width / 4); $dd++ unless $i % 2;
+   $i = IPA::Point::subtract( $i, IPA::Local::median( $i, w => $dd, h => $dd));
+   $i = IPA::Local::unionFind( $i, method => 'ave', threshold => 10);
+   $i = IPA::Local::median( $i, w => 7, h => 7);
+
    return $w-> win_leavesubplace( $i) if $mode == 1;
 
    my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 8));
@@ -824,146 +830,31 @@ sub process
    $rect-> end_paint;
    $rect-> type( im::Byte);
 
-   # union find
-   my @mp = map { 
-      my $st = $_;
-      #$w-> sb_text( sprintf( "Union find: %d%%", ($st - $minUF)*100/($maxUF-$minUF)));
-      $w-> sb_text( sprintf( "%d%% ( union find )", $pct += $step));
-      $_ = IPA::Local::unionFind( $i, method => 'ave', threshold => $st * $stepUF); 
-   } $minUF .. $maxUF;
-
    # contour find
-   my $num = 0;
    my $sz = $i-> width * $i-> height;
-   my @co;
-   my $contnum = 0;
-   for ( @mp) {
-      $num++;
-      $w-> sb_text( sprintf( "%d%% ( contour find )", $pct += $step));
-      my $img = $_;
-      my @hist = IPA::Misc::histogram( $_);
-      my @srt_hist = sort { $b <=> $a } @hist;
-      my $max_bkg  = $srt_hist[0] * 0.8;
-
-      my $cou = {};
-      my $j;
-
-      my @map = map { ($hist[$_] > $max_bkg) ? 0 : 255} (0..255);
-      $map[0] = 255 if $hist[0] < $max_bkg; # if 0 is valid
-      for ( 0..255) {
-         $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
-      }
-      $img = IPA::Point::remap( $img, lookup => \@map);
-      $img = IPA::Global::fill_holes( $img);
-      $img-> put_image_indirect( $rect, (0) x 4, $img-> size, $rect-> size, rop::AndPut); 
-      $img = IPA::Global::area_filter( $img, minArea => $min_area, maxArea => $sz);
-      $cou = [map { IPA::Region::contour2region($_)} @{IPA::Global::identify_contours( $img, edgeSize => 1)}];
-      push @co, $cou;
+   $w-> sb_text( sprintf( "%d%% ( contour find )", $pct += $step));
+   my @hist = IPA::Misc::histogram( $i);
+   my @srt_hist = sort { $b <=> $a } @hist;
+   my $max_bkg  = $srt_hist[0] * 0.8;
+   my @map = map { ($hist[$_] > $max_bkg) ? 0 : 255} (0..255);
+   for ( 0..255) {
+      $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
    }
-
-   
-   # Contour link
-   my $l;
-   my @kgraph;
-   for ( $l = 0; $l < @co - 1; $l++) { # frame cycle
-      $w-> sb_text( sprintf( "%d%% ( contour link )", $pct += $step ));
-      my ( $co1, $co2) = ( $co[$l], $co[$l+1]);
-      my @klayer = ();
-      my $src_contour = $co1;
-      my $kid = -1;
-      for ( @$src_contour) {
-         my $k;
-         my ( $min_diff, $best_contour, $best_outline, $src)  = ( 1_000_000_000, undef, undef, $_);
-         my $kid2 = -1;
-         for ( @$co2) {
-            $kid2++;
-            my $cnt_diff = IPA::Region::combine( $src, $_, 'and');
-            $cnt_diff = $cnt_diff->[2] ? $cnt_diff->[2] : 1_000_000_001; # hacky interconnection ratio
-            next if $cnt_diff > $min_diff;
-            $min_diff = $cnt_diff;
-            $best_contour = $kid2;
-            $best_outline = $_;
-         }
-         $kid++;
-         next unless defined $best_outline;
-         push @klayer, {
-            id   => [ $kid, $best_contour], # used as unique ID for matching
-            out  => [ $src, $best_outline], # just outlines
-            rank => 0,  # chain length,
-            top  => 1,  # if the link is a tree top?
-            branches => [],
-         };
-      }
-      push @kgraph, \@klayer;
+   { # zero the neighboring-to-peak values by eroding the histogram ( not the image )
+      my $d1 = Prima::Image-> create( width => 256, height => 2, type => im::Byte, 
+        data => join('', map { chr } @map, (255)x(300)));
+      my $bhist_dilate = 2;
+      $d1 = IPA::Morphology::erode( $d1) while $bhist_dilate--;
+      @map = map { ord } split('', $d1-> data);
+      splice( @map, 256);
    }
    
-   
-   $w-> sb_text( sprintf( "%d%% ( line up contours )", $pct += $step));
-   for ( $l = @kgraph - 2; $l >= 0; $l--) { # layer cycle from top to bottom
-      for ( @{$kgraph[ $l]}) { # every contour hash in the layer
-         my $src_cont = $_;
-         for ( @{$kgraph[ $l + 1]}) { # match to upper every at the upper layer
-            my $dst_cont = $_;
-            my $r = $src_cont->{rank} + 1;
-            if ( $src_cont->{id }->[$r] == $dst_cont->{id }->[0]) {
-                 my ( $i, $j) = ( 1, $r + 1);
-                 for ( ; $j <= $r + 1 + $dst_cont->{rank}; $j++, $i++) { # for every uplink
-                    $src_cont->{id }->[$j] = $dst_cont->{id} ->[$i];
-                    $src_cont->{rank}++;
-                 }
-                 $src_cont->{top} = 0;
-                 $src_cont->{uplink} = $dst_cont;
-                 push @{$dst_cont->{branches}}, $src_cont;
-                 last;
-            }
-         }
-      }
-   }
-   
-   $w-> sb_text( sprintf( "%d%% ( bulk mask )", $pct += $step));
-   my $kk; 
-   $kk = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::BW);
-   $kk-> begin_paint;
-   $kk-> backColor( 0);
-   $kk-> clear;
-   $kk-> color( cl::White);
-   for ( map { @$_} @kgraph) {
-      my $x = $_;
-      next if !$x->{top};
-      my $rank = $x-> {rank};
-      my @z = @{$x->{branches}};
-      while ( scalar @z) {
-         @z = map {@{$_->{branches}}} @z;
-         $rank++;
-      }
-      next if $rank < $min_rank;
-      my ( $clx, $a1, $a2, $a3) = ( 0, 0, 0, 0);
-      for ( @{$x->{out}}) {
-         IPA::Region::plot( $kk, $_);
-         $a1++;
-      }
-      @z = @{$x->{branches}};
-      while ( scalar @z) {
-         for ( @z) {
-            $a3++;
-            for ( @{$_->{out}} ) {
-               IPA::Region::plot( $kk, $_);
-               $a2++;
-            }
-         }
-         @z = map {@{$_->{branches}}} @z;
-      }
-      $l++;
-   }
 
-   $kk-> end_paint;
-   $kk-> type( im::Byte);
-   $w-> sb_text( sprintf( "%d%% ( filter mask )", $pct += $step));
-   $kk = IPA::Global::fill_holes( $kk);
-   $dd = $dilate;
-   $kk = IPA::Morphology::erode( $kk) while $dd--;
-   $kk = IPA::Global::area_filter( $kk, minArea => $min_area, maxArea => $sz);
-   return $w-> win_leavesubplace( $kk) if $mode == 2;
+   $i = IPA::Point::remap( $i, lookup => \@map);
+   return $w-> win_leavesubplace( $i) if $mode == 2;
+   
+   $i-> put_image_indirect( $rect, (0) x 4, $i-> size, $rect-> size, rop::AndPut); 
+
    $w-> sb_text( sprintf( "%d%% ( find branches )", $pct += $step));
 
    sub weigh_center
@@ -980,50 +871,56 @@ sub process
       return ( $a[0]->[scalar(@{$a[0]})/2], $a[1]->[scalar(@{$a[1]})/2]);
    }
 
-   my $mask  = $kk-> dup;
+   my $mask  = $i-> dup;
    my @centroids;
    my @processes;
-   my @excl = map { int( $_ - $_ / 20) } $kk-> size;
-
-   sub excluded  # find if a contour touches the exclusion borders
-   {
-      my $flip = 0;
-      my @excl = @_[1,2];
-      for ( @{$_[0]}) {
-         return 1 if $_ >= $excl[ $flip];
-         $flip = $flip ? 0 : 1;
-      }
-      return 0;
-   }
+   my @end_excl   = map { int( $_ - $_ / 20) } $i-> size;
+   my @start_excl = map { int( $_ / 20) } $i-> size;
 
    my ( $ww, $hh) = $mask-> size;
    my $ls = int(( $ww * 8 + 31) / 32) * 4;
    my $dy = int($hh / 20);
    my $szy = int(($hh - 2 * $dy) / $w-> {ini}-> {nLines});
 
-   # last stage processing
-   my $lines = IPA::Morphology::thinning( $mask); 
-   $i = $orgi-> dup;
-   # threshold the enhanced image 
-   $i-> rop( rop::AndPut);
-   $i-> put_image( 0, 0, $mask);
-   my ($j,$max,$maxj) = (0,0,0);
-   for ( $j = $max_index; $j >= $min_index; $j -= 10) {
-      my $ix = IPA::Point::threshold( $i, minvalue => $j);
+
+   my $bkg = 0;
+   my ($j,$max,$maxj,$minarea) = (0,0,0,1_000_000_000);
+   my $levmax = ( $bkg > 128) ? ( 256 - $bkg) : $bkg;
+   for ( $j = 5; $j < $levmax; $j += 10) {
+      my $ix = IPA::Point::threshold( $i, minvalue => $bkg - $j, maxvalue => $bkg + $j);
+      $ix-> resample( 0, 255, 255, 0);
       $ix = IPA::Global::fill_holes( $ix);
-      $ix = IPA::Global::area_filter( $ix, minArea => $min_area);
+      $ix = IPA::Global::area_filter( $ix, minArea => $min_area, maxArea => $maxArea);
       my $count = scalar @{IPA::Global::identify_contours( $ix)};
-      $maxj = $j, $max = $count if $max <= $count;
+      if ( $max < $count) {
+         $max = $count;
+         $maxj = $j; 
+         $minarea = 1_000_000_000;
+      } elsif ( $max == $count) {
+         my $area = $ix-> sum;
+         if ( $area < $minarea) {
+            $minarea = $area;
+            $maxj = $j;
+         }
+      }
    }
 
-   $i = IPA::Point::threshold( $i, minvalue => $maxj);
+   $i = IPA::Point::threshold( $i, minvalue => $bkg - $maxj, maxvalue => $bkg + $maxj);
+   $i-> resample( 0, 255, 255, 0);
    $i = IPA::Global::fill_holes( $i);
-   $i = IPA::Global::area_filter( $i, minArea => $min_area);
+   $i = IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
+
+   my $lines = IPA::Morphology::thinning( $i); 
+   my $prune_lut = $IPA::Morphology::transform_luts{prune}->();
+   $dd = $rad;
+   $lines = IPA::Morphology::BWTransform( $lines, lookup => $prune_lut) while $dd--;
+   $lines = IPA::Global::area_filter( $lines, minArea => $rad * 2, maxArea => $maxArea);
+
    $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
 
    $dd = $rad;
    $i = IPA::Morphology::erode( $i) while $dd--;
-   $i = IPA::Global::area_filter( $i, minArea => $min_area);
+   $i = IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
    $dd = int($rad / 2);
    if ( $dd) {
       $i = IPA::Morphology::dilate( $i) while $dd--;
@@ -1031,6 +928,7 @@ sub process
    my $centers = IPA::Morphology::dilate( $i);
    $lines-> rop( rop::NotSrcAnd);
    $lines-> put_image( 0, 0, $i);
+   $lines = IPA::Global::area_filter( $lines, minArea => $rad, maxArea => $maxArea);
    $centers-> rop( rop::NotSrcAnd);
    $centers-> put_image( 0,0, $i);
    $w-> sb_text( sprintf( "%d%% ( finalize )", $pct += $step));
@@ -1049,9 +947,13 @@ sub process
       return;
    }
 
-   for( @{IPA::Global::identify_contours( $centers)}) {
-      my ( $x, $y) = weigh_center( $_);
-      push @centroids, "$x $y";
+   CONTO: for( @{IPA::Global::identify_contours( $centers)}) {
+      my $flip = 0;
+      for ( @$_) {
+         next CONTO if $_ >= $end_excl[ $flip] || $_ < $start_excl[$flip];
+         $flip = $flip ? 0 : 1;
+      }
+      push @centroids, join( ' ', weigh_center( $_));
    }
 
    my $d = $lines-> data;
@@ -1063,7 +965,7 @@ sub process
       $scanline =~ s/(?:(\0+)|(.))/push(@localp, $ax) if $2; $ax += length($1||$2); ' '/xeg;
       my $prev = -$rad * 2;
       push @processes, map {"$_ $ay"} grep {
-         my $yes = ( $prev + $rad < $_);
+         my $yes = ( $prev + $rad < $_) && ( $_ >= $start_excl[0]) && ( $_ < $end_excl[0]);
          $prev = $_;
          $yes;
       } @localp;
@@ -1082,7 +984,6 @@ sub process
    $::application-> pointer( $w-> {savePointer});
    $w-> {savePointer} = undef;
 }
-
 sub process_series
 {
    my $w = $_[0];
@@ -1182,11 +1083,15 @@ sub win_showrec
          PD2        => { onClick => sub { $w-> process('', 2)}},
          PD3        => { onClick => sub { $w-> process('', 3)}},
          RestoreBtn => { onClick => sub { $w-> win_restore; }},
+         
+         # don't need'em for a while
+         UF => { enabled => 0},
+         
       )}-> {Form1}};
      if ( $@) { Prima::message("Error in setup resource: $@"); return };
      my ( $r, $i) = ( $w-> {recWindow}, $w-> {ini});
      $r-> UF-> From-> value ($i-> {C_minUF}   ); 
-     $r-> UF-> To-> value   ( $i-> {C_maxUF}  );
+     $r-> UF-> To-> value   ($i-> {C_maxUF}  );
      $r-> UF-> Step-> value ($i-> {C_stepUF}  );
      $r-> FLT-> Min-> value ($i-> {C_min_index});
      $r-> FLT-> Max-> value ($i-> {C_max_index});
@@ -1760,6 +1665,8 @@ $w-> visible(1);
 $w-> select;
 
 $w-> win_extwarn;
+
+$w-> win_loadfile( $ARGV[0]) if @ARGV;
 
 run Prima;
 
