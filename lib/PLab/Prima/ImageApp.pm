@@ -827,10 +827,25 @@ sub winmenu_view
    ]];
 }
 
+sub win_emulatemouse
+{
+   my ( $self, $button) = @_;
+   my @pos = $self-> IV-> pointerPos; 
+   my $state = $self-> IV-> get_shift_state;
+   $self-> IV-> notify( 'MouseDown',  $button, $state, @pos);
+   $self-> IV-> notify( 'MouseUp',    $button, $state, @pos);
+   $self-> IV-> notify( 'MouseClick', $button, $state, @pos, 0);
+}
+
 sub winmenu_edit
 {
    return
    [ edit => '~Edit' => [
+      [ EditEmulation  => '~Emulation' => [
+         [ 'EditEmulation1' => "Left mouse button" => sub { $_[0]-> win_emulatemouse(mb::Left)}],
+         [ 'EditEmulation2' => "Right mouse button" => sub { $_[0]-> win_emulatemouse(mb::Right)}],
+         [ 'EditEmulation3' => "Middle mouse button" => sub { $_[0]-> win_emulatemouse(mb::Middle)}],
+      ]],
       [ EditProperties => "~Properties..." => q(opt_properties),],
    ]];
 }
@@ -884,6 +899,9 @@ sub opt_keys
       'FileCloseImage'  => [ kb::NoKey,          "Close the opened file"],
       'FileExit'        => [ '@X',               "Exit the program"],
       'EditProperties'  => [ kb::NoKey        ,  "Edit program properties"],
+      'EditEmulation1'  => [ 'a'              ,  "Emulate left mouse button"],
+      'EditEmulation2'  => [ 'd'              ,  "Emulate right mouse button"],
+      'EditEmulation3'  => [ 's'              ,  "Emulate bottom mouse button"],
       'ViewNormal'      => [ '^1'             ,  "Set image zoom factor to 1:1"],
       'ViewBestFit'     => [ '^Z'             ,  "View image so it fits best to the window"],
       'ViewAutoBestFit' => [ kb::NoKey        ,  "Toggle automatic 'best fitting' options"],

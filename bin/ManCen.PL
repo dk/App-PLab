@@ -59,14 +59,6 @@ sub win_newframe
    }
 }
 
-sub winmenu_updatemappings
-{
-   my $self = $_[0];
-   $self-> SUPER::winmenu_updatemappings();
-   $self-> menu-> EditTogglePoint-> key( kb::NoKey);
-}
-
-
 # finds connections between points in @$exp and @$pts.
 # the arrays are being sorted.
 
@@ -483,15 +475,6 @@ sub on_create
    );
 }
 
-sub on_keydown
-{
-   my ($me,$code,$key,$mod) = @_;
-   if ( Prima::AbstractMenu-> translate_key( $code, $key, $mod) == $me-> {keyMappings}-> {Key_EditTogglePoint}) {
-      $me-> IV-> notify( 'MouseDown', mb::Left, $mod, $me-> IV-> pointerPos);
-      $me-> clear_event;
-   }
-}
-
 sub win_pointerchanged
 {
    my  $w = $_[0];
@@ -571,7 +554,6 @@ sub opt_keys
    return {
       %{$_[0]-> SUPER::opt_keys()},
       EditClearPoints  => [ kb::NoKey,      'Remove all points'],
-      EditTogglePoint  => [ 'x',            'Set or remove the point under cursor'],
       EditToggleLookup => [ kb::Space,      'Turn on or off neighbour points lookup'],
       HelpAbout        => [ kb::NoKey,      'Standard about box'],
       HelpPlabApps     => [ kb::NoKey,      'Online PlabApps overview'],
@@ -903,10 +885,6 @@ splice( @{$$wedt[2]}, 0, 0,
       $_[0]-> sb_points(); 
       $_[0]-> win_untemp;
       $_[0]-> IV-> repaint; 
-   }, ],
-   [ EditTogglePoint => "Put/erase point" => sub {
-       Prima::MsgBox::message( "Not from menu, of course!\nJust press it!",
-         mb::Ok|mb::Warning);
    }, ],
    [],
    [ EditToggleLookup => "Toggle look~up" => sub{
