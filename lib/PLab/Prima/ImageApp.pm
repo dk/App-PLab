@@ -221,6 +221,16 @@ sub capture
    $self-> SUPER::capture( $capFlag, @rest);
 }
 
+sub screen2point
+{
+   return map { int } shift-> SUPER::screen2point( @_);
+}
+
+sub point2screen
+{
+   return map { int } shift-> SUPER::point2screen( @_);
+}
+
 package ImageAppWindow;
 use vars qw(@ISA %dlgProfile $ico $pointClickTolerance);
 @ISA = qw(Prima::Window);
