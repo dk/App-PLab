@@ -454,6 +454,7 @@ sub win_inidefaults
       MaxState     => 0,
       SerType      => 'Short',
       extSaveDir   => '',
+      silentExtDir => 0,
       dirTimeout   => 120,
       statusDelay  => 5,
       showHint     => 1,
@@ -479,11 +480,18 @@ sub win_extwarn
 {
    my $w = $_[0];
    return unless length $w->{ini}->{extSaveDir};
-   if ( Prima::MsgBox::message_box( $::application-> name, ".".$w-> {dataExt}." save path is ".
+   return if $w->{ini}->{silentExtDir};
+   my $ret = Prima::MsgBox::message_box( $::application-> name, ".".$w-> {dataExt}." save path is ".
       $w->{ini}->{extSaveDir}.".\nDo you want to set it to the current directory, as default?",
-      mb::YesNo | mb::Warning) == mb::Yes) {
+      mb::YesNo | mb::Abort | mb::Warning, {
+      buttons => { mb::Abort, { text => 'Ne~ver' }},
+    });
+   if ( $ret == mb::Yes) {
       $w->{ini}->{extSaveDir} = '';
       $w-> win_extpathchanged;
+   } elsif ( $ret == mb::Abort) {
+      Prima::MsgBox::message("You will be never asked again, until you manually re-set the save path to the default", mb::Information);
+      $w->{ini}->{silentExtDir} = 1;
    }
 }
 
@@ -1167,6 +1175,7 @@ sub opt_proppop
       }
       $w->{ini}->{extSaveDir} = $nbpages-> UseDef-> checked ?
          '' : $nbpages-> Path-> text;
+      $w->{ini}->{silentExtDir} = 0 unless length $w->{ini}->{extSaveDir};
       $w-> win_extpathchanged if $w->{ini}->{extSaveDir} ne $dlg->{page0}->{extSaveDir};
 
       my $newmask = $nbpages-> RG_SeriesType-> RG_Long-> checked ? 3 : 2;
