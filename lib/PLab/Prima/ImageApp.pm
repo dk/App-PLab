@@ -10,7 +10,6 @@ use Cwd qw(abs_path);
 use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
               IniFile Sliders Utils Notebooks ComboBox Buttons Label Outlines
               ColorDialog Contrib::ButtonGlyphs KeySelector ImageDialog);
-use PLab;
 use Prima::Contrib::ButtonGlyphs;
 use PLab::Prima::ImageAppGlyphs;
 no Prima::StartupWindow;
@@ -309,7 +308,7 @@ sub open_help
 {       
    my ( $self, $address) = @_;
    $address = 'index.html' unless defined $address;
-   $address = "$PLab::profile{online_doc}/PLabApps/$address" unless $address =~ /^(http)|(ftp)|(file)/i;
+   $address = "http://www.plab.ku.dk/doc/PLabApps/$address" unless $address =~ /^(http)|(ftp)|(file)/i;
    if ( Prima::Application-> get_system_info->{apc} == apc::Win32) {
       open FWKERJFHWEKRFH, "|start $address";
       close FWKERJFHWEKRFH if 0;
