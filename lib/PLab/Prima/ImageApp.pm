@@ -1381,10 +1381,10 @@ sub iv_magnify
    my ( $w, $self) = @_;
    return if $w-> {magnify};
    my $x = $self-> insert( 'MagnifyingGlassWidget' );
-   $w-> ivm_repaint( $self, $self-> pointerPos);
    $x-> focus;
    $w-> IV-> capture(1);
    $w-> {magnify} = $x;
+   $w-> ivm_repaint( $self, $self-> pointerPos);
 }
 
 sub iv_cancelmagnify
