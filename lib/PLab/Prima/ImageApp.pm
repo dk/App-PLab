@@ -228,6 +228,7 @@ sub open_help
 
 sub modified
 {
+   return $_[0]-> {modified} unless $#_;
    $_[0]-> {modified} = $_[1];
 }
 
