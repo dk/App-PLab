@@ -79,8 +79,10 @@ sub on_create
          font => { size => 10, pitch => fp::Fixed}, 
          color => cl::Red,
          origin => [ 249, 8],
+	 size   => [ 80, 20],
          transparent => 1,
          text   => "???:???",
+	 valignment => ta::Middle,
       ],
       [ Label =>
          name => "MarkState",
@@ -89,6 +91,8 @@ sub on_create
          transparent => 1,
          color => cl::Black,
          origin => [ 336, 8],
+	 height => 20,
+	 valignment => ta::Middle,
       ],
    );
    $w-> menu-> AutoCrispening-> checked( $w-> {ini}-> {autoCrispen});
@@ -682,13 +686,40 @@ sub IV_MouseDown
        $self-> clear_event;
        return;
    }
-   if ( $btn == mb::Right) {
-      if ( $mod & km::Ctrl) {
-         $mod &= !km::Ctrl;
-      } else {
-         $self-> clear_event;
-         return;
+
+   if ( $btn == mb::Right && !( $mod & km::Ctrl)) 
+   {
+      if ( ! defined( $w-> { markState}) || $w-> { markState} < 2)
+      {
+         if ( $w-> {markState})
+         {
+            $w-> reset_mark_state( 0);
+         }
+         else
+         {
+            $w-> reset_mark_state( 1);
+         }
       }
+      else {
+         if ( $w->{ binfo}->{ drawMode}) {
+            $w-> done_draw_mode();
+         }
+         elsif ( defined( $w->{ binfo}->{ nearestBranch})) {
+            $w->{ totalLength} -= $w-> calc_branch_length( $w->{ branches}->[ $w->{ binfo}->{ nearestBranch}]);
+            $w->{ totalBranches}--;
+            splice @{ $w->{ branches}}, $w->{ binfo}->{ nearestBranch}, 1;
+            $w->{ binfo}->{ nearestBranch} = undef;
+            $w-> modified( 1); 
+            $self-> repaint;
+         }
+         $w-> show_stats( undef, 1);
+      }
+      $self-> clear_event;
+      return;
+   }
+   
+   if ( $btn == mb::Right && ($mod & km::Ctrl)) {
+      $mod &= !km::Ctrl;
    }
    $w-> SUPER::IV_MouseDown( $self, $btn, $mod, $x, $y); 
 }
@@ -782,35 +813,6 @@ sub IV_MouseClick
    
    $self-> clear_event;
    return unless defined $w-> {file};
-   if ( $btn == mb::Right) 
-   {
-      if ( ! defined( $w-> { markState}) || $w-> { markState} < 2)
-      {
-         if ( $w-> {markState})
-         {
-            $w-> reset_mark_state( 0);
-         }
-         else
-         {
-            $w-> reset_mark_state( 1);
-         }
-      }
-      else {
-         if ( $w->{ binfo}->{ drawMode}) {
-            $w-> done_draw_mode();
-         }
-         elsif ( defined( $w->{ binfo}->{ nearestBranch})) {
-            $w->{ totalLength} -= $w-> calc_branch_length( $w->{ branches}->[ $w->{ binfo}->{ nearestBranch}]);
-            $w->{ totalBranches}--;
-            splice @{ $w->{ branches}}, $w->{ binfo}->{ nearestBranch}, 1;
-            $w->{ binfo}->{ nearestBranch} = undef;
-            $w-> modified( 1); 
-            $self-> repaint;
-         }
-         $w-> show_stats( undef, 1);
-      }
-      return;
-   }
 
    return unless $btn == mb::Left;
    return unless defined $w-> {markState};
