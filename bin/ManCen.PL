@@ -283,14 +283,23 @@ EOF
       splice( @rxdata, $ptIdx, 2);
       
       # saving backing data
-      if ( open F, "> $cenname.bak") {
-         $w-> rpt_write( *F, \@rxdata);
-         close F;         
-      } else {
-         Prima::MsgBox::message("Error saving $cenname.bak. Aborting");
-         $ok = 0;
-         last;
-      }   
+      if ( @rxdata) {
+         if ( open F, "> $cenname.bak") {
+            $w-> rpt_write( *F, \@rxdata);
+            close F;         
+         } else {
+            Prima::MsgBox::message("Error saving $cenname.bak. Aborting");
+            $ok = 0;
+            last;
+         }   
+      } elsif ( -f "$cenname.bak") {
+	 # null files to be deleted
+    	 unless ( unlink "$cenname.bak") {
+            Prima::MsgBox::message("Error accessing $cenname.bak. Aborting");
+            $ok = 0;
+            last;
+	     }
+      }
    
       $curr += $incr;
       $g-> value( $g-> value + 1);
@@ -305,8 +314,13 @@ EOF
       $statwin-> text("Restoring .cen files...");
       while ( $curr != $to + $incr) {
          my $cenname = $w-> win_extname( $w-> win_formfilename( $curr));
-         Prima::MsgBox::message("Cannot rename backup file. Please note that it $cenname.bak file contains actual information.")
-            if !unlink($cenname) || !rename( "$cenname.bak", $cenname);
+         if ( -f "$cenname.bak") {
+              Prima::MsgBox::message("Cannot rename backup file. Please note that it $cenname.bak file contains actual information.")
+                 if !unlink($cenname) || !rename( "$cenname.bak", $cenname);
+         } else {
+            Prima::MsgBox::message("Cannot delete $cenname. Note that it contains non actual information.")
+               if !unlink($cenname);
+    	 }
          $curr += $incr;
          $g-> value( $g-> value + 1);
          $g-> update_view;
@@ -333,7 +347,7 @@ EOF
       $w-> IV-> repaint;
       Prima::MsgBox::message("Queue processed", mb::OK|mb::Information);
    } elsif ( defined $jump) {
-      $w-> {ambiguity} = \@ambiguity if $w-> win_loadfile( $jump);
+      $w-> {ambiguity} = \@ambiguity if $w-> win_loadfile( $jump) && scalar(@ambiguity);
    }   
 }   
 
