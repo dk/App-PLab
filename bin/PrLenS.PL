@@ -850,9 +850,9 @@ sub process
 
       my @map = map { ($hist[$_] > $max_bkg) ? 0 : 255} (0..255);
       $map[0] = 255 if $hist[0] < $max_bkg; # if 0 is valid
-#     for ( 0..255) {
-#        $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
-#     }
+      for ( 0..255) {
+         $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
+      }
       $img = IPA::Point::remap( $img, lookup => \@map);
       $img = IPA::Global::fill_holes( $img);
       $img-> put_image_indirect( $rect, (0) x 4, $img-> size, $rect-> size, rop::AndPut); 
@@ -1251,6 +1251,17 @@ sub IV_MouseDown
 sub IV_MouseMove
 {
    my ( $w, $self, $mod, $x, $y) = @_;
+
+   unless ( $self->{transaction}) {
+      if (( $mod & km::Shift) && defined $self-> image) {
+         my $i = $self-> image;
+         my $pix = $i-> pixel( $self-> screen2point( $x, $y));
+         $w-> sb_text((( $i-> type & im::BPP) > 8) ?
+            sprintf("%02x %02x %02x", ($pix>>16)&0xFF, ($pix>>8)&0xFF, $pix&0xFF) :
+            $pix
+         ) if $pix != cl::Invalid;
+      }
+   }
    
    $w-> SUPER::IV_MouseMove( $self, $mod, $x, $y);
 
