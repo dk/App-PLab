@@ -397,7 +397,7 @@ sub on_create
          ( "Color_$_", $w-> ini_makecolor( $colors->{$_}->[0]))
       } keys %$colors);
    $w->{iniFile} = Prima::IniFile-> create(
-      file => Prima::path('PLabApps'),
+      file => Prima::Utils::path('PLabApps'),
       default => [
          $uname.$::application->name => \@iniDefaults,
       ]
