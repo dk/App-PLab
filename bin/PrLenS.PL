@@ -1086,6 +1086,11 @@ sub win_restore
    $w-> {recWindow}-> RestoreBtn-> enabled( 0) if $w-> {recWindow};
 }
 
+sub rop_put
+{
+   my ( $img, $obj, $rop) = @_;
+   $img-> put_image_indirect( $obj, 0, 0, 0, 0, $obj-> size, $obj-> size, $rop);
+}
 
 sub process
 {
@@ -1103,49 +1108,95 @@ sub process
    my $i = $orgi-> dup;
    my $dd = $dilate;
    $dd = int($i-> width / 4); $dd++ unless $i % 2;
-   $i = IPA::Point::subtract( $i, IPA::Local::median( $i, w => $dd, h => $dd));
-   $i = IPA::Local::unionFind( $i, method => 'ave', threshold => 10);
-#   $i = IPA::Local::median( $i, w => 7, h => 7);
 
+   my $rect = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::Byte);
+   $rect-> put_image_indirect( $rect, 
+                               4, 4, 0, 0, 
+                               $i-> width - 8, $i-> height - 8,
+                               $i-> width - 8, $i-> height - 8, rop::Whiteness);
+   $i = IPA::Local::ridge( $i, scale => 16);
+   my $centers = IPA::Point::threshold( $i, minvalue => 1, true => 0, false => 255);
+   $centers-> type(im::Byte);
+   $i = IPA::Point::threshold( $i, maxvalue => 255, preserve => 1, false => 255);
+   $i-> type( im::Byte);
+   $i = IPA::Local::hysteresis( $i, threshold => [ 20, 255]);
+   $i = IPA::Global::fill_holes( $i);
+   rop_put( $i, $rect, rop::AndPut);
+   $i = IPA::Global::area_filter( $i, minArea => $min_area);
+   $i = IPA::Morphology::dilate( $i);
+   $i = IPA::Global::fill_holes( $i);
+   $i = IPA::Morphology::erode( $i);
+   rop_put( $centers, $i, rop::AndPut);
+   $centers = IPA::Global::area_filter( $centers, minArea => 5);
    return $w-> win_leavesubplace( $i) if $mode == 1;
 
    my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 8));
    $pct -= $step;
 
-   my $rect = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::BW,
-      color => cl::Black, backColor => cl::White, conversion => ict::None);
-   $rect-> begin_paint;
-   $rect-> clear;
-   $rect-> rectangle( 0, 0, $rect-> width - 1, $rect-> height - 1);
-   $rect-> end_paint;
-   $rect-> type( im::Byte);
-
-   # contour find
-   my $sz = $i-> width * $i-> height;
-   $w-> sb_text( sprintf( "%d%% ( contour find )", $pct += $step));
-   my @hist = IPA::Misc::histogram( $i);
-   my @srt_hist = sort { $b <=> $a } @hist;
-   my $max_bkg  = $srt_hist[0] * 0.8;
-   my @map = map { ($hist[$_] > $max_bkg) ? 0 : 255} (0..255);
-   for ( 0..255) {
-      $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
-   }
-   { # zero the neighboring-to-peak values by eroding the histogram ( not the image )
-      my $d1 = Prima::Image-> create( width => 256, height => 2, type => im::Byte, 
-        data => join('', map { chr } @map, (255)x(300)));
-      my $bhist_dilate = 2;
-      $d1 = IPA::Morphology::erode( $d1) while $bhist_dilate--;
-      @map = map { ord } split('', $d1-> data);
-      splice( @map, 256);
-   }
-   
-
-   $i = IPA::Point::remap( $i, lookup => \@map);
-   return $w-> win_leavesubplace( $i) if $mode == 2;
-   
-   $i-> put_image_indirect( $rect, (0) x 4, $i-> size, $rect-> size, rop::AndPut); 
-
    $w-> sb_text( sprintf( "%d%% ( find branches )", $pct += $step));
+
+   my $z = $centers-> dup;
+   rop_put( $centers, $centers, rop::XorPut); # clear
+   rop_put( $z, $z, rop::XorPut); # comment it out if want gamma-centroids also
+   my $rz = $i;
+
+   # collect all characteristic radii
+   my $scale = 0;
+   while ( $rz-> sum) {
+      my $e = IPA::Morphology::erode( $rz, neighborhood => ((($scale++)%2)?4:8));
+      if ( $scale < $rad * 2) {
+         $rz = $e;
+         next;
+      }
+      # collect all disappeared points
+      my $x = IPA::Morphology::reconstruct( $rz, $e);
+      rop_put( $x, $rz, rop::XorPut);
+      rop_put( $z, $x, rop::OrPut);
+      $rz = $e;
+   }
+   
+   for( @{IPA::Global::identify_contours( $i)}) {
+       my $x = $i-> dup;   
+       rop_put( $x, $x, rop::XorPut);
+       IPA::Region::plot( $x, IPA::Region::contour2region( $_), 0, 0, 255);
+       $x = IPA::Morphology::reconstruct( $z, $x);
+       #my $ma = $min_area;
+       $scale = 0;
+       my @objects;
+       my @plot_regions;
+       #print "new contour\n";
+       while ( $x-> sum) {
+          $x = IPA::Morphology::dilate( $x, neighborhood => ((($scale++)%2)?4:8));
+          my $xz = $x-> dup;
+          rop_put( $xz, $i, rop::NotSrcAnd);
+          next unless $xz-> sum;
+          # remove the overlapped objects
+          my $objects = IPA::Morphology::reconstruct( $x, $xz);
+          rop_put( $x, $objects, rop::NotSrcAnd);
+          # see if max circles are big enough
+          $objects = IPA::Global::area_filter( $objects, minArea => $min_area);
+          for( @{IPA::Global::identify_contours( $objects)}) {
+	     my $reg = IPA::Region::contour2region( $_);
+             my $area = IPA::Region::area( $reg);
+	     push @objects, [ $area, $reg ];
+	  }
+       }
+       # sort objects and remove too small
+       if ( @objects) {
+	  @objects = sort { $$b[0] <=> $$a[0] } @objects;
+	  my $a0 = $objects[0]->[0];
+	  for ( @objects) {
+	     my $a = $$_[0];
+	     last if $a < $a0 * 0.6;
+	     $a0 = $a;
+	     push @plot_regions, $$_[1];
+	  }
+	  # plot all filtered
+	  for ( @plot_regions) {
+	     IPA::Region::plot( $centers, $_, 0, 0, 255);
+	  }
+       }
+   }
 
    sub weigh_center
    {
@@ -1170,34 +1221,7 @@ sub process
    my ( $ww, $hh) = $mask-> size;
    my $ls = int(( $ww * 8 + 31) / 32) * 4;
    my $dy = int($hh / 20);
-   my $szy = int(($hh - 2 * $dy) / $w-> {ini}-> {nLines});
-
-
-   my $bkg = 0;
-   my ($j,$max,$maxj,$minarea) = (0,0,0,1_000_000_000);
-   my $levmax = ( $bkg > 128) ? ( 256 - $bkg) : $bkg;
-   for ( $j = 5; $j < $levmax; $j += 10) {
-      my $ix = IPA::Point::threshold( $i, minvalue => $bkg - $j, maxvalue => $bkg + $j);
-      $ix-> resample( 0, 255, 255, 0);
-      $ix = IPA::Global::fill_holes( $ix);
-      $ix = IPA::Global::area_filter( $ix, minArea => $min_area, maxArea => $maxArea);
-      my $count = scalar @{IPA::Global::identify_contours( $ix)};
-      if ( $max < $count) {
-         $max = $count;
-         $maxj = $j; 
-         $minarea = 1_000_000_000;
-      } elsif ( $max == $count) {
-         my $area = $ix-> sum;
-         if ( $area < $minarea) {
-            $minarea = $area;
-            $maxj = $j;
-         }
-      }
-   }
-
-   $i = IPA::Point::threshold( $i, minvalue => $bkg - $maxj, maxvalue => $bkg + $maxj);
-   $i-> resample( 0, 255, 255, 0);
-   $i = IPA::Global::fill_holes( $i);
+   my $szy = int(($hh - 2 * $dy) / $w->{ini}->{nLines});
    $i = IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
 
    my $lines = IPA::Morphology::thinning( $i); 
@@ -1205,23 +1229,11 @@ sub process
    $dd = $rad;
    $lines = IPA::Morphology::BWTransform( $lines, lookup => $prune_lut) while $dd--;
    $lines = IPA::Global::area_filter( $lines, minArea => $rad * 2, maxArea => $maxArea);
+   rop_put( $lines, $centers, rop::NotSrcAnd);
+   rop_put( $centers, IPA::Morphology::erode( $centers), rop::NotSrcAnd);
+
 
    $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
-
-   $dd = $rad;
-   $i = IPA::Morphology::erode( $i) while $dd--;
-   $i = IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
-   $dd = int($rad / 2);
-   if ( $dd) {
-      $i = IPA::Morphology::dilate( $i) while $dd--;
-   }
-   my $centers = IPA::Morphology::dilate( $i);
-   $lines-> rop( rop::NotSrcAnd);
-   $lines-> put_image( 0, 0, $i);
-   $lines = IPA::Global::area_filter( $lines, minArea => $rad, maxArea => $maxArea);
-   $centers-> rop( rop::NotSrcAnd);
-   $centers-> put_image( 0,0, $i);
-   $w-> sb_text( sprintf( "%d%% ( finalize )", $pct += $step));
 
    if ( $mode == 3) {
       $i = $orgi-> dup;
@@ -1242,7 +1254,8 @@ sub process
    CONTO: for( @{IPA::Global::identify_contours( $centers)}) {
       my $flip = 0;
       for ( @$_) {
-         next CONTO if $_ >= $end_excl[ $flip] || $_ < $start_excl[$flip];
+         #next CONTO if $_ >= $end_excl[ $flip] || $_ < $start_excl[$flip];
+         next CONTO if $_ < $start_excl[$flip];
          $flip = $flip ? 0 : 1;
       }
       push @centroids, join( ' ', weigh_center( $_));
