@@ -1351,10 +1351,12 @@ sub opt_statistics
       );
    my $index = 0;
    my $statCount = 4;
+   my @resName;
 
 
    for my $xmlname ( @res) {
       my ( $bN, $bSum, @hist);
+      push( @resName, "$xmlname : ");
       my $state = $w-> win_xmlload( $xmlname, onObject => sub {
          my ( $attrs, $n0, $n1) = @_;
          # collect sum of backgrounds
@@ -1410,6 +1412,7 @@ sub opt_statistics
                $dataCommon{$_}-> [$statCount + $index] = $attrs->{$_};
             }
             $index++;
+            $resName[-1] .= "$index ";
          }
       } 
       );
@@ -1489,9 +1492,9 @@ Statistics morphology data
 Calculated on $tm
 HR
    if ( vec( $dres, ocq::Files, 1)) {
-      my $howmany = ( scalar @res > 1) ? "s were" : " was";
+      my $howmany = ( scalar @resName > 1) ? "s were" : " was";
       $texts .= "The following file$howmany used for data gathering:\n";
-      $texts .= "   $_\n" for @res;
+      $texts .= "   $_\n" for @resName;
    }
    $texts .= sprintf("Average background brightness: %.7g +/- %.7g (averaged by %d pixels)\n",
       $dataBack{brightness}->[1],
@@ -1575,38 +1578,37 @@ HR
        $texts .= "\nBrightness histogram data\n";
        $meta2 .= "\nBrightness histogram data\n";
        if ( vec( $dres, ocq::Equalize, 1)) {
-          $max -= $min;
-          $min = 0;
+          $min -= 255;
+          $max -= 255;
        } 
-       
-       my $xdivline = ('-' x (( $max - $min + 1) * ( $maxSpace + 1) + 8))."\n";
-       $texts .= $xdivline;
-       $meta2 .= $xdivline;
-       my $cfmt  = ("\%10.5g " x ( $max - $min + 1));
-       my $i = 0;
-       $texts .= sprintf( "  N | $cfmt |\n", $min..$max);
-       $meta2 .= sprintf( "  N  $cfmt\n",    $min..$max);
-       $texts .= $xdivline;
-       $meta2 .= $xdivline;
-       for ( @dataHist) {
-          $i++;
-          unless ( defined $_) {
-             $texts .= sprintf( "%3d | N/A\n", $i);
-             $meta2 .= sprintf( "%3d  N/A\n", $i);
-             next;
+       my $i;
+       my $xdivline = ('-' x ( 9 + scalar(@dataHist) * 6 + 3 + 40 + 2));
+
+       my $c = '';
+       $c .= "$xdivline\n        |";
+       for ( $i = 0; $i < @dataHist; $i++) {
+          $c .= sprintf("%6d", $i + 1);
+       }  
+       $c .= ' | ';
+       $c .= sprintf('%10s'x4, qw(Sum Ave SEM SD));
+       $c .= " |\n$xdivline\n";
+       for ( $i = 0; $i < $max - $min; $i++) {
+          $c .= sprintf( '   %3d  |', $i + $min);
+          for ( @dataHist) {
+             if ( defined $_) {
+                $c .= defined($_->[$i]) ? sprintf('%6d', $_->[$i]) : '   N/A';
+             } else {
+                $c .= '   N/A';
+             }   
           }   
-          $texts .= sprintf( "%3d | $cfmt |\n", $i, @$_);
-          $meta2 .= sprintf( "%3d  $cfmt\n", $i, @$_);
+          $c .= ' | ';
+          $c .= sprintf("%10.5g"x4, $sum[$i], $ave[$i], $sd[$i], $sem[$i]);
+          $c .= " |\n";
        }
-       $texts .= $xdivline;
-       $texts .= sprintf( "%3s | $cfmt |\n", 'Ave', @ave);
-       $texts .= sprintf( "%3s | $cfmt |\n", 'Ave', @ave);
-       $texts .= sprintf( "%3s | $cfmt |\n", 'SEM', @sd);
-       $texts .= sprintf( "%3s | $cfmt |\n", 'SD', @sd);
-       $meta2 .= sprintf( "%3s $cfmt\n", 'Sum', @sum);
-       $meta2 .= sprintf( "%3s $cfmt\n", 'SEM', @sd);
-       $meta2 .= sprintf( "%3s $cfmt\n", 'SD', @sd);
-       $meta2 .= sprintf( "%3s $cfmt\n", 'Sum', @sum);
+       $texts .= $c;
+       $c =~ s/\|//g;
+       $meta1 .= "\n" . $c;
+       $texts .= "$xdivline\n";
    }
 
 
