@@ -99,15 +99,36 @@ sub on_create
          text   => "???:???",
 	 valignment => ta::Middle,
       ],
+      [ Widget => 
+          name => "MarkStateEx",
+          transparent => 1,
+          origin  => [ 336, 8],
+          size    => [ 20, 20],
+          color   => 0,
+          onPaint => sub {
+             my ( $self, $canvas) = @_;
+             my $c = $self-> color;
+             return unless $c;
+             $canvas-> color( cl::Black);
+             $canvas-> fill_ellipse( 10, 10, 10, 10);
+             $canvas-> color( $c);
+             $canvas-> fill_ellipse( 10, 10, 8, 8);
+          },
+      ], 
       [ Label =>
          name => "MarkState",
          autoWidth => 1,
          font => { size => 10, pitch => fp::Variable},  
          transparent => 1,
          color => cl::Black,
-         origin => [ 336, 8],
+         origin => [ 356, 8],
 	 height => 20,
 	 valignment => ta::Middle,
+         onClick => sub {
+            if ( ! defined( $w-> { markState}) || $w-> { markState} < 2) {
+              $w-> reset_mark_state( $w-> {markState} ? 0 : 1);
+            }
+         }
       ],
    );
    $w-> menu-> EditAutoCrispening-> checked( $w-> {ini}-> {autoCrispen});
@@ -549,11 +570,22 @@ sub reset_mark_state
       $state = defined($w-> {file}) ? $x : ( $x | 64);
    }
    my $markState = $w-> ToolBar-> MarkState;
-   ($markState-> text( "Nothing to mark"), return) if $state & 64;
-   $markState-> text( "Marking processes") if ( $state & 3) == 0;
-   $markState-> text( "Marking cells") if ( $state & 3) == 1;
-   $markState-> text( "Drawing processes" . ( $w->{ binfo}->{ drawMode} ? " (drawing)" : "")) 
-      if ( $state & 3) == 2;
+   my $markStateEx =  $w-> ToolBar-> MarkStateEx;
+   if ( $state & 64) {
+      $markState-> text( "Nothing to mark");
+      $markStateEx-> color( 0);
+      return;
+   }
+   if (( $state & 3) == 0) {
+      $markState-> text( "Marking processes");
+      $markStateEx-> color( $w-> {ini}-> {Color_Processes});
+   } elsif (( $state & 3) == 1) {
+      $markState-> text( "Marking cells");
+      $markStateEx-> color( $w-> {ini}-> {Color_Cells});
+   } elsif (( $state & 3) == 2) {
+      $markState-> text( "Drawing processes" . ( $w->{ binfo}->{ drawMode} ? " (drawing)" : "")) ;
+      $markStateEx-> color( 0);
+   }
    $w-> {markStateX} = $state;
    $w-> {markState} = ($state & 64) ? undef : $state;
 }
