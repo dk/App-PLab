@@ -18,6 +18,8 @@ print OUT <<'!NO!SUBS!';
 
 #!/usr/bin/perl -w
 
+#!/usr/bin/perl -w
+
 use strict;
 use Prima;
 use Prima::Application name => "PrLenS";
@@ -592,7 +594,7 @@ sub generate_statistics_text {
    my ($fmin, $fmax) = $w-> win_getseriesrange;
    my $n = $fmax - $fmin + 1;
 
-   my ( $fw) = 10; # Field width
+   my ( $fw, $pi2) = ( 10, 1.570796); # Field width
 
    my @params = (
       "This", "Total", "Average", 
@@ -605,8 +607,8 @@ sub generate_statistics_text {
       $nc, $tnc, $tnc / $n,
       $np, $tnp, $tnp / $n, 
       $cpr, $tcpr, $tcpr / $n,
-      $np * $npix, $tnp * $npix, $tnp * $npix / $n,
-      $cpr * $npix, $tcpr * $npix, $tcpr * $npix / $n,
+      $np * $npix * $pi2, $tnp * $npix * $pi2, $tnp * $npix * $pi2 / $n,
+      $cpr * $npix * $pi2, $tcpr * $npix * $pi2, $tcpr * $npix * $pi2 / $n,
       
       $nb, $tnb, $tnb / $n,
       $sbl, $tbl, $tbl / $n,
@@ -615,23 +617,24 @@ sub generate_statistics_text {
    );
 
    my $ret = sprintf <<STOP_HERE, @params;
-                                           %${fw}s  %${fw}s  %${fw}s
-                                           %${fw}s
+                                       %${fw}s  %${fw}s  %${fw}s
+                                       %${fw}s
 
-Number of lines                          : %${fw}d
-Number of pixels in segment (PX)         : %${fw}.3f
-Number of images in the series           : %${fw}d
+Number of lines                      : %${fw}d
+Number of pixels in segment (PX)     : %${fw}.3f
+Number of images in the series       : %${fw}d
 
-Number of cells (NC)                     : %${fw}d  %${fw}d  %${fw}.3f
-Number of process points (NP)            : %${fw}d  %${fw}d  %${fw}.3f
-Processes number/cells ratio (NP/NC)     : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Length of processes by points (NP*PX)    : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Processes length/cells ratio (NP*PX/NC)  : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Number of cells (NC)                 : %${fw}d  %${fw}d  %${fw}.3f
+Number of process points (NP)        : %${fw}d  %${fw}d  %${fw}.3f
+Processes number/cells ratio (NP/NC) : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length of processes (NP*PX*pi/2)     : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length/cells ratio (NP*PX*pi/2NC)    : %${fw}.3f  %${fw}.3f  %${fw}.3f
 
-Number of drawn processes (NDP)          : %${fw}d  %${fw}d  %${fw}.3f
-Length of processes (PL)                 : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Average process length (PL/NDP)          : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Process length ratio (PL/NC)             : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Number of drawn processes (NDP)      : %${fw}d  %${fw}d  %${fw}.3f
+Length of processes (PL)             : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Average process length (PL/NDP)      : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Process length ratio (PL/NC)         : %${fw}.3f  %${fw}.3f  %${fw}.3f
+
 STOP_HERE
 
    my $i;
