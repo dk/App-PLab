@@ -1598,7 +1598,7 @@ sub update_state
           my $u = ucfirst $_;
           $text1 .= "$u: ".$w->{"n$u"}." (".$w->{"total$u"}.") ";
           next if $_ eq 'cells';
-          push @text2, "(" . ($w->{totalCells} ? sprintf("%.3g",$w->{"total$u"} / $w->{totalCells}) 
+          push @text2, "(" . ($w->{totalCells} ? sprintf("%.4g",$w->{"total$u"} / $w->{totalCells}) 
                                                : "NONE") . ")";
        }
        $w-> sb_text( $text1 . ' Ratio: '. join(',',@text2));
