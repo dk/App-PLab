@@ -16,12 +16,10 @@ $Config{'startperl'} -w
 
 print OUT <<'!NO!SUBS!';
 
-#!/usr/bin/perl -w
-
-
 use strict;
 use Prima;
 use Prima::Application name => "PrLenS";
+use Prima::Edit;
 use PLab::Prima::ImageApp;
 use PLab::Prima::Calibrations;
 use IPA::Local;
@@ -51,6 +49,7 @@ sub win_inidefaults
       autoCrispen        => 0,
       autoStretch        => 0,
       StatisticsWindowRect => '120 120 400 250',
+      StatisticsWindowFont => 0,
       SpectrumMin        => 0,
       SpectrumMax        => 50,
       ShowExtras         => 0,
@@ -499,11 +498,14 @@ sub save_info
    my ($ix,$iy) = $w-> IV-> image-> size;
    my @l = @{$w->{layers}};
    my $sets = join(',', @l[2 .. $#l]);
+   my $stats = $w-> generate_statistics_text;
 
 print F <<HEADER;
 <?xml version="1.0"?>
 <!DOCTYPE prlens_data SYSTEM "prlens_data.dtd">
-<!-- This is a generated file.  Do not edit! -->
+<!-- This is a generated file.  Do not edit! 
+$stats
+-->
 <prlens_data
   series         = "$w->{fileBeg}"
   imageext       = "$w->{fileEnd}"
@@ -572,93 +574,142 @@ sub generate_statistics_text {
 
    my ( $nc, $nb, $sbl) = ( $w->{ nCells}, scalar( @{ $w->{ branches}}),
                             $w-> calc_branches_length( $w->{ branches}));
+   my ( $np, $tnp) = ( $w-> {nProcesses}, $w-> {totalProcesses});
    my ( $abl) = ( $nb == 0 ? 0 : $sbl / $nb);
    my ( $blr) = ( $nc == 0 ? 0 : $sbl / $nc);
 
    my ( $tnc, $tnb, $tbl) = ( $w->{ totalCells}, $w->{ totalBranches}, $w->{ totalLength});
+   my ( $cpr, $tcpr) = ( $nc ? $np / $nc : 0, $tnc ? $tnp / $tnc : 0);
    my ( $tabl) = ( $tnb == 0 ? 0 : $tbl / $tnb);
    my ( $tblr) = ( $tnc == 0 ? 0 : $tbl / $tnc);
 
+   my $npix = $w-> IV-> image;
+   $npix = $npix ? $npix-> height / $w-> {ini}-> {nLines}: 0;
+   my ($fmin, $fmax) = $w-> win_getseriesrange;
+   my $n = $fmax - $fmin + 1;
+
    my ( $fw) = 10; # Field width
 
-   return sprintf <<STOP_HERE, "This", "Total", "frame", $nc, $tnc, $nb, $tnb, $sbl, $tbl, $abl, $tabl, $blr, $tblr;
-                                  %${fw}s  %${fw}s
-                                  %${fw}s
-Number of cells (NC)            : %${fw}d  %${fw}d
-Number of drawn processes (NDP) : %${fw}d  %${fw}d
-Length of processes (PL)        : %${fw}.3f  %${fw}.3f
-Average process length (PL/NDP) : %${fw}.3f  %${fw}.3f
-Process length ratio (PL/NC)    : %${fw}.3f  %${fw}.3f
+   my @params = (
+      "This", "Total", "Average", 
+      "frame",
+
+      $w->{ini}->{nLines},
+      $npix, 
+      $n,
+      
+      $nc, $tnc, $tnc / $n,
+      $np, $tnp, $tnp / $n, 
+      $cpr, $tcpr, $tcpr / $n,
+      $np * $npix, $tnp * $npix, $tnp * $npix / $n,
+      $cpr * $npix, $tcpr * $npix, $tcpr * $npix / $n,
+      
+      $nb, $tnb, $tnb / $n,
+      $sbl, $tbl, $tbl / $n,
+      $abl, $tabl, $tabl / $n,
+      $blr, $tblr, $tblr / $n,
+   );
+
+   my $ret = sprintf <<STOP_HERE, @params;
+                                           %${fw}s  %${fw}s  %${fw}s
+                                           %${fw}s
+
+Number of lines                          : %${fw}d
+Number of pixels in segment (PX)         : %${fw}.3f
+Number of images in the series           : %${fw}d
+
+Number of cells (NC)                     : %${fw}d  %${fw}d  %${fw}.3f
+Number of process points (NP)            : %${fw}d  %${fw}d  %${fw}.3f
+Processes number/cells ratio (NP/NC)     : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length of processes by points (NP*PX)    : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Processes length/cells ratio (NP*PX/NC)  : %${fw}.3f  %${fw}.3f  %${fw}.3f
+
+Number of drawn processes (NDP)          : %${fw}d  %${fw}d  %${fw}.3f
+Length of processes (PL)                 : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Average process length (PL/NDP)          : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Process length ratio (PL/NC)             : %${fw}.3f  %${fw}.3f  %${fw}.3f
 STOP_HERE
+
+   my $i;
+   for ( $i = 2; $i < scalar @{$w->{layers}}; $i++) {
+      my $l = $w-> {layers}->[$i];
+      my $ul = ucfirst $l;
+      my ( $nn, $tn) = ( $w-> {"n$ul"}, $w-> {"total$ul"} );
+      my ( $c, $tc) = ( $nc ? $nn / $nc : 0, $tnc ? $tn / $tnc : 0);
+      my @params = (
+        $nn, $tn, $tn / $n,
+        $c, $tc, $tc / $n, 
+        $nn * $npix, $tn * $npix, $tn * $npix / $n,
+        $c * $npix, $tc * $npix, $tc * $npix / $n,
+      );
+      
+      $ret .= sprintf <<FMT, @params;
+
+Number of points of set $i (N$i)           : %${fw}d  %${fw}d  %${fw}.3f
+Processes number/cells ratio (N$i/NC)     : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length of processes by points (N$i*PX)    : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Processes length/cells ratio (N$i*PX/NC)  : %${fw}.3f  %${fw}.3f  %${fw}.3f
+FMT
+   }
+
+   return $ret;
 }
 
 
 sub show_stats {
-   my $ww = $_[0];
+   my $w = $_[0];
    my ( $update_window) = $_[ 2];
 
-   return unless defined $ww->{ branches};
-
    my ( $sd, $norepaint);
-   if ( ! ( $sd = eval { $ww->Statistics})) {
+   if ( ! ( $sd = eval { $w->Statistics})) {
 
       return if $update_window;
 
-      my ( @rect) = split ' ', $ww->{ ini}->{ StatisticsWindowRect};
+      my ( @rect) = split ' ', $w->{ ini}->{ StatisticsWindowRect};
       $sd = Prima::Window->create(
          name => 'Statistics',
          rect => [ @rect],
-         font => {
-                  pitch => fp::Fixed,
-                 },
-         owner => $ww,
+         owner => $w,
          onClose => sub {
-            $ww->{ ini}->{ StatisticsWindowRect} = join( ' ', $_[ 0]->rect);
+            $w->{ ini}->{ StatisticsWindowRect} = join( ' ', $_[ 0]->rect);
          },
+         menuItems => [
+            [ '~Copy' => sub { $sd-> StatText-> copy } ],
+            [ '~Font' => [
+               ['~Increase' , 'Ctrl+Plus' , '^+', sub { 
+                  my $f = $sd-> StatText-> font;
+                  $f-> size( $f-> size + 1);
+                  $w->{ini}->{StatisticsWindowFont} = $f-> size;
+               }],
+               ['~Decrease' , 'Ctrl+Minus' , '^-', sub { 
+                  my $f = $sd-> StatText-> font;
+                  $f-> size( $f-> size - 1);
+                  $w->{ini}->{StatisticsWindowFont} = $f-> size;
+               }],
+            ]],
+         ],
       );
 
+      my %font = ( pitch => fp::Fixed );
+      $font{size} = $w->{ini}->{StatisticsWindowFont} if $w->{ini}->{StatisticsWindowFont};
       $sd->insert(
-         Button =>
-         name => "OK",
-         hint       => "Close window",
-         text => '~Ok',
-         origin => [ 10, 10],
-         default => 1,
-         modalResult => mb::Ok,
-         onClick => sub {
-            $_[ 0]->owner->close;
-         },
-      );
-
-      my @lorig = ( 10, $sd->OK->top + 10);
-      my @lsize = ( $sd->width - 20, $sd->height - $sd->OK->top - 20);
-
-      $sd->insert(
-         Label =>
+         'Prima::Edit' =>
          name => 'StatText',
-         font => { pitch => fp::Fixed, },
-         origin => [ @lorig],
-         size => [ @lsize],
+         readOnly => 1,
+         hScroll => 1,
+         vScroll => 1,
+         font => \%font,
+         origin => [ 0,0],
+         size => [ $sd-> size],
          growMode => gm::Client,
-         text => $ww-> generate_statistics_text(),
-         valignment => ta::Center,
-         onSize => sub {
-            my @lines = split /\n/, $_[ 0]->text;
-            my $ln = scalar( @lines) + 1;
-            $_[ 0]->font( height => ( $_[ 0]->height / $ln),
-                          pitch => fp::Fixed,
-                        ) if $ln != 0;
-         },
+         text => $w-> generate_statistics_text(),
+         blockType => bt::Vertical,
       );
 
-      $sd-> show;
       $norepaint = 1;
    }
 
-   unless ( $norepaint) {
-      $sd->StatText->text( $ww-> generate_statistics_text());
-      $sd->repaint;
-   }
+   $sd->StatText->text( $w-> generate_statistics_text()) unless $norepaint;
 }
 
 sub file_backup
@@ -967,6 +1018,20 @@ sub stretching_state_changed
    $w-> IV-> repaint;
 }
 
+sub remove_frame_data
+{
+   my $w = $_[0];
+   for ( @{$w->{layers}}) {
+      my ( $l, $ul) = ( $_, ucfirst $_);
+      $w->{$l} = [];
+      $w->{"total$ul"} -= $w->{"n$ul"};
+      $w->{"n$ul"} = 0;
+   }
+   $w-> {branches} = [];
+   $w-> show_stats( undef, 1);
+   $w-> IV-> repaint;
+}
+
 sub win_entersubplace
 {
    my $w = $_[0];
@@ -1179,6 +1244,7 @@ sub process
    $w-> {processes} = \@processes;
    $w-> {nProcesses} = scalar( @processes);
    
+   $w-> show_stats( undef, 1);
    $w-> IV-> repaint;
    $w-> modified(1);
    $w-> update_state;
@@ -1856,6 +1922,7 @@ my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
    [ EditAutoCrispening => "~Auto crispening" => q(crispen_state_changed) ],
    [ EditAutoStretching => "Auto stretching"  => q(stretching_state_changed) ],
+   [ EditRemoveAll => "Remove all frame data"  => q(remove_frame_data) ],
    [],
    [ EditRecSetup => "Recognition ~setup"  => q(win_showrec), ],   
    [ -EditProcess => "~Automatic recognition" => q(process)],
