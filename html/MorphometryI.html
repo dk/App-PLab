@@ -2,18 +2,18 @@
 <title>Morphometry I manual</title>
 <h3>Morphometry I</h3>
 <p>
-The Morphometry application is used to acquire and gather morphological parameters from images.
+The Morphometry application is used to acquire and gather morphological parameters from the gray-level images.
 <p>
 
 <h3>Navigation</h3>
 <p>
 <b>Contours</b>
 <p>
-Program deals with object contours, which are used for gatheing information. Most usual way is to draw
-the contour upon the image. It's possible to draw lines and draw "freehand". Once left mouse button is pressed over
+Program deals with object contours, which are used for gathering information. Most usual way is to draw
+the contour upon the image. It's possible to draw lines and draw "freehand" curves. Once the left mouse button is pressed over
 the image, the "freehand" curve is drawn, and when released, the line mode is turned on - the marquee 
-thin line shows where line will be plotted. To stop drawing, press <Esc> or right mouse button.
-Any file operation aborts drawing session also.<br> The figure drawn in one session called contour.
+thin line shows where line will be plotted. To stop drawing, press Esc or right mouse button.
+Any file operation aborts drawing session also.<br> &nbsp;The figure drawn in one session called contour.
 <p>
 
 <b>Undo</b>
@@ -84,12 +84,53 @@ after image is processed. These calculations are turned off by default because t
 time to run. But once calculated, some morphological parameters are stored into .xml file along with
 contours. 
 <p>
+<b>Advanced object information</b>
+<p>
+The program can collect more information about the objects, but since it requires
+quite a lot time to compute, these features are turned off by default.
+The "Calculation" page in preferences dialog contains settings of these calculations.
+The following topics controls the program behavior when the .xml file is written on disk.
+
+<p>
+<i>Calculate brigthness</i><br>
+If on, the summary brightnesses and the brightness histogram are calculated for
+each object. For the backgrounds, however, histogram is not calculated.
+The calculation takes significant time and depends on number of objects.
+<p>
+<i>Equalize brightness</i><br>
+Can onle be on if "Calculate brightness" is on also. Before the brightess
+calculations are performed, the image is subject to equalization procedure,
+used to make the background of the scene equally illuminated. The calculation
+time is very large, but it's not dependant of objects amount.
+<p>
+<i>Convex hull derived parameters</i><br>
+If on, perform calculation of set of parameters for every object, which are:
+for object: width, length, length/width, and breadth; for convex: area, width, perimeter, form factor,
+xcentroid, ycentroid, fxcentroid, fycentroid, object length/convex width, and spreading index.
+calculation time is small and depends of number of objects. Cannot be turned off while
+"Process index/domain" switch is on.
+<p>
+<i>Number of rotations</i><br>
+The topic is under construction
+<p>
+<i>Process index/domain</i><br>
+Calculates the area of the holes for every objects. Calculation time: insignificant.
+<p>
+
+<i>Significance level for holes,%</i><br>
+Holes, whose area is less than specified amount ( in percents) are not treated in statistic caulations.
+This switch does not apply to the program behavior when it is saving .xml file, it is used
+for statistic calulations.
+<p>
+
+
+<p>
 <b>Batch processing</b>
 <p>
 The program doesn't write any files and starts no calculations unless contours were changes.
 It will be laborous task if needed to recalculate parameters on the whole series, in case
 they are not present in the .xml files to that series, consequently loading, drawing, undoing and saving
-data. Instead, "Recalculate series" command subsequently loads, and saves images, and saves recalculated data.
+data. Instead, "Recalculate series" command subsequently loads, and saves images, and saves the recalculated data.
 <p>
 <b>Statistics</b>
 <p>
@@ -112,8 +153,8 @@ Special statistics window keys:
 <h3>Productivity tips</h3>
 <p>
 Holding Shift key reveals brightness of a pixel under the mouse pointer.<p>
-It's possible to change line width when drawing a contour ("Edit/Preferences/Appearance").<p>
-Toolbar includes two extra icons - "Toggle points/contours" and "calculate statistics".<p>
-To calculate statistics it's no need to load an image.<p>
+It's possible to change line widths and line colors when drawing a contour ("Edit/Preferences/Appearance").<p>
+Toolbar includes two extra icons - "Toggle points/contours" and "Calculate statistics".<p>
+To calculate statistics there's no need to load an image.<p>
 
 </html>
