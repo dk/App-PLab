@@ -16,6 +16,14 @@ $Config{'startperl'} -w
 
 print OUT <<'!NO!SUBS!';
 
+#!/usr/local/bin/perl58 -w
+
+#!/usr/local/bin/perl58 -w
+
+#!/usr/local/bin/perl58 -w
+
+#!/usr/local/bin/perl58 -w
+
 #!/usr/bin/perl -w
 
 #!/usr/bin/perl -w
@@ -194,17 +202,18 @@ sub xmlload
 
             # calibrations
             if ( $attrs{xcalib} != $w->{ ini}->{ XCalibration} ||
-                 $attrs{ycalib} != $w->{ ini}->{ YCalibration}) {
-                 my $x = $attrs{xcalib} != $w->{ ini}->{ XCalibration};
-                 my $y = $attrs{ycalib} != $w->{ ini}->{ YCalibration};
-               if ( Prima::MsgBox::message("Image contains calibrations [$attrs{xcalib} $attrs{ycalib}] opposite to current [".
-                          $w->{ini}->{XCalibration}.' '.$w->{ini}->{YCalibration}.']. '.
+                 $attrs{ycalib} != $w->{ ini}->{ YCalibration} ||
+                 $attrs{resolution} != $w->{ ini}->{ Resolution}) {
+               if ( Prima::MsgBox::message(
+                         "Image contains calibrations [$attrs{xcalib}:$attrs{ycalib}, $attrs{resolution} mkm] opposite to current [".
+                          $w->{ini}->{XCalibration}.':'.$w->{ini}->{YCalibration}.',' . $w->{ini}-> {Resolution}.' mkm]. '.
                           "Keep current settings?",
                           mb::YesNo|mb::Warning, { buttons => { mb::No , { text => '~Apply new'}}}) == mb::Yes) {
                   $w-> modified( 1);
                } else {
                   $w->{ini}->{XCalibration} = $attrs{xcalib};
                   $w->{ini}->{YCalibration} = $attrs{ycalib};
+                  $w->{ini}->{Resolution}   = $attrs{resolution};
                }
             }
 
@@ -521,6 +530,7 @@ $stats
   creationdate   = "$datestr"
   xcalib         = "$w->{ini}->{XCalibration}"
   ycalib         = "$w->{ini}->{YCalibration}"
+  resolution     = "$w->{ini}->{Resolution}"
   filemaskwidth  = "$w->{cypherMask}"
   lines          = "$w->{ini}->{nLines}"
   datasets       = "$sets"
@@ -590,9 +600,11 @@ sub generate_statistics_text {
    my ( $tblr) = ( $tnc == 0 ? 0 : $tbl / $tnc);
 
    my $npix = $w-> IV-> image;
-   $npix = $npix ? $npix-> height / $w-> {ini}-> {nLines}: 0;
+   my $inactive = sprintf('%d', $npix-> height / 20);
+   $npix = $npix ? ( $npix-> height - $inactive * 2) / $w-> {ini}-> {nLines}: 0;
    my ($fmin, $fmax) = $w-> win_getseriesrange;
    my $n = $fmax - $fmin + 1;
+   my $res = $w-> {ini}->{Resolution};
 
    my ( $fw, $pi2) = ( 10, 1.570796); # Field width
 
@@ -603,12 +615,15 @@ sub generate_statistics_text {
       $w->{ini}->{nLines},
       $npix, 
       $n,
+      $res,
       
       $nc, $tnc, $tnc / $n,
       $np, $tnp, $tnp / $n, 
       $cpr, $tcpr, $tcpr / $n,
       $np * $npix * $pi2, $tnp * $npix * $pi2, $tnp * $npix * $pi2 / $n,
+      $np * $npix * $pi2 * $res, $tnp * $npix * $pi2 * $res, $tnp * $npix * $pi2  * $res/ $n,
       $cpr * $npix * $pi2, $tcpr * $npix * $pi2, $tcpr * $npix * $pi2 / $n,
+      $cpr * $npix * $pi2 * $res, $tcpr * $npix * $pi2 * $res, $tcpr * $npix * $pi2  * $res/ $n,
       
       $nb, $tnb, $tnb / $n,
       $sbl, $tbl, $tbl / $n,
@@ -617,23 +632,26 @@ sub generate_statistics_text {
    );
 
    my $ret = sprintf <<STOP_HERE, @params;
-                                       %${fw}s  %${fw}s  %${fw}s
-                                       %${fw}s
+                                        %${fw}s  %${fw}s  %${fw}s
+                                        %${fw}s
 
-Number of lines                      : %${fw}d
-Number of pixels in segment (PX)     : %${fw}.3f
-Number of images in the series       : %${fw}d
+Number of lines                       : %${fw}d
+Number of pixels in segment (PX)      : %${fw}.3f
+Number of images in the series        : %${fw}d
+Resolution, micrometers/pixel         : %${fw}.4f
 
-Number of cells (NC)                 : %${fw}d  %${fw}d  %${fw}.3f
-Number of process points (NP)        : %${fw}d  %${fw}d  %${fw}.3f
-Processes number/cells ratio (NP/NC) : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Length of processes (NP*PX*pi/2)     : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Length/cells ratio (NP*PX*pi/2NC)    : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Number of cells (NC)                  : %${fw}d  %${fw}d  %${fw}.3f
+Number of process points (NP)         : %${fw}d  %${fw}d  %${fw}.3f
+Processes number/cells ratio (NP/NC)  : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length of processes (NP*PX*pi/2) ,pix : %${fw}.3f  %${fw}.3f  %${fw}.3f
+                                 ,mkm : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Length/cells ratio (NP*PX*pi/2NC),pix : %${fw}.3f  %${fw}.3f  %${fw}.3f
+                                 ,mkm : %${fw}.3f  %${fw}.3f  %${fw}.3f
 
-Number of drawn processes (NDP)      : %${fw}d  %${fw}d  %${fw}.3f
-Length of processes (PL)             : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Average process length (PL/NDP)      : %${fw}.3f  %${fw}.3f  %${fw}.3f
-Process length ratio (PL/NC)         : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Number of drawn processes (NDP)       : %${fw}d  %${fw}d  %${fw}.3f
+Length of processes (PL)              : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Average process length (PL/NDP)       : %${fw}.3f  %${fw}.3f  %${fw}.3f
+Process length ratio (PL/NC)          : %${fw}.3f  %${fw}.3f  %${fw}.3f
 
 STOP_HERE
 

@@ -9,8 +9,9 @@ sub win_inidefaults
    my @rc = $w-> rect;
    return (
       $w-> SUPER::win_inidefaults,
-      XCalibration => 1.25,
-      YCalibration => 0.9375,
+      XCalibration => 1.0,
+      YCalibration => 1.0,
+      Resolution   => 0.4065,
    );
 }
 
@@ -35,29 +36,41 @@ sub opt_propcreate
    );
    $nb-> insert_to_page( $pg, [
       SpinEdit =>
-      origin   => [ 5, 65],
+      origin   => [ 5, 120 ],
       name     => 'XC',
       %spinPrf,
    ], [
       SpinEdit =>
-      origin => [ 5, 10],
+      origin => [ 5, 65],
       name => 'YC',
+      %spinPrf,
+   ], [
+      SpinEdit =>
+      origin => [ 5, 10],
+      name => 'RC',
       %spinPrf,
    ]);
    $nb-> insert_to_page( $pg, [
       Label     =>
-      origin    => [ 5, 90],
+      origin    => [ 5, 145],
       size      => [ 265, 20],
       autoWidth => 0,
       text      => '~X-calibration',
       focusLink => $nbpages-> XC,
    ], [
       Label     =>
-      origin    => [ 5, 35],
+      origin    => [ 5, 90],
       size      => [ 265, 20],
       autoWidth => 0,
       text      => '~Y-calibration',
       focusLink => $nbpages-> YC,
+   ], [
+      Label     =>
+      origin    => [ 5, 35],
+      size      => [ 265, 20],
+      autoWidth => 0,
+      text      => '~Size of 1 pixel, mkm ( resolution )',
+      focusLink => $nbpages-> RC,
    ]);
 }
 
@@ -68,6 +81,7 @@ sub opt_proppush
 # Calibrations
    $nbpages-> XC-> value($w->{ini}->{XCalibration});
    $nbpages-> YC-> value($w->{ini}->{YCalibration});
+   $nbpages-> RC-> value($w->{ini}->{Resolution});
 }
 
 sub opt_proppop
@@ -76,12 +90,14 @@ sub opt_proppop
    $w-> SUPER::opt_proppop( $dlg, $nb, $nbpages, $mr);
 # Calibrations
    if ( $mr) {
-      my ( $xc, $yc) = ( $nbpages-> XC->value, $nbpages-> YC->value);
+      my ( $xc, $yc, $rc) = ( $nbpages-> XC->value, $nbpages-> YC->value, $nbpages-> RC-> value);
       $w-> modified( 1) if
          $w->{ini}->{XCalibration} != $xc ||
-         $w->{ini}->{YCalibration} != $yc;
+         $w->{ini}->{XCalibration} != $yc ||
+         $w->{ini}->{Resolution} != $rc;
       $w->{ini}->{XCalibration} = $xc;
       $w->{ini}->{YCalibration} = $yc;
+      $w->{ini}->{Resolution}   = $rc;
    }
 }
 
