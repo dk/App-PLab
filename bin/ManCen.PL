@@ -892,9 +892,9 @@ my $w = CenWindow-> create(
       ImageAppWindow::winmenu_view(),
       [],["~Help" => [
          ["~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
-         ["~Contents" => sub { $_[0]-> open_help(); }],
+         ["~PLab Apps" => sub { $_[0]-> open_help(); }],
+         ["~Contents" => sub { $_[0]-> open_help("ManCen.html"); }],
       ]],
-      
    ],
    accelItems => [
       [ Space => 0, 0, kb::Space => sub{

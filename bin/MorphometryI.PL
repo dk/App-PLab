@@ -2381,7 +2381,8 @@ my $w = MorphoWindow-> create(
       ImageAppWindow::winmenu_view(),
       [],["~Help" => [
          ["~About" => sub {Prima::MsgBox::message("PLab application series, Morphometry I, version 1.00", mb::OK|mb::Information)}],
-         ["~Contents" => sub { $_[0]-> open_help(); }],
+         ["~PLab Apps" => sub { $_[0]-> open_help(); }],
+         ["~Contents" => sub { $_[0]-> open_help("MorphometryI.html"); }],
       ]],
    ],
    accelItems => [

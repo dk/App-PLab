@@ -205,7 +205,8 @@ sub dlg_file
 sub open_help
 {       
    my ( $self, $address) = @_;
-   $address = 'http://raven.plab.ku.dk/plab/index.html' unless defined $address;
+   $address = 'index.html' unless defined $address;
+   $address = "$PLab::profile{online_doc}/PLabApps/$address" unless $address =~ /^(http)|(ftp)|(file)/i;
    if ( Prima::Application-> get_system_info->{apc} == apc::Win32) {
       open FWKERJFHWEKRFH, "|start $address";
       close FWKERJFHWEKRFH if 0;
