@@ -206,13 +206,13 @@ sub open_help
 {       
    my ( $self, $address) = @_;
    $address = 'http://raven.plab.ku.dk/plab/index.html' unless defined $address;
-   my $pg = $::application-> sys_action('browser');
-   Prima::MsgBox::message("No browsing facilities found. \nPlease point your browser to \n$address", 
-       mb::OK|mb::Warning), return unless $pg;
    if ( Prima::Application-> get_system_info->{apc} == apc::Win32) {
-      open F, "|$pg $address" or Prima::MsgBox::message("Cannot execute $pg"); 
-      close F if 0;
+      open FWKERJFHWEKRFH, "|start $address";
+      close FWKERJFHWEKRFH if 0;
    } else {
+      my $pg = $::application-> sys_action('browser');
+      Prima::MsgBox::message("No browsing facilities found. \nPlease point your browser to \n$address", 
+          mb::OK|mb::Warning), return unless $pg;
       my $f = fork;
       if ( $f < 0) {
          Prima::MsgBox::message("Cannot fork."); 
@@ -1084,6 +1084,7 @@ sub sb_text
       text  => $text,
       raise => 1,
    );
+   $self-> update_view;
    $self-> { timer} = $self-> insert( Timer =>
       timeout => 3000,
       onTick  => sub {

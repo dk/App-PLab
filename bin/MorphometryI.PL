@@ -328,6 +328,7 @@ sub win_inidefaults
       LW0              => 1,
       LW1              => 1,
       LW2              => 3,
+      EqualBrightness  => 0,
       CalcBrightness   => 0,
       CalcConvex       => 0,
       CalcHoles        => 0,
@@ -897,6 +898,23 @@ sub win_saveframe
       $w-> win_validate(1);
       $w-> win_syncrecdata;
       my $image = $w-> IV-> image;
+      if ( $w->{ini}->{CalcBrightness} && $w->{ini}->{EqualBrightness}) {
+         # subtracting low frequencies
+         $w-> sb_text("Equalizing background ...");
+         my $i1 = IPA::Global::butterworth( $image, 
+            low        => 1,
+            homomorph  => 0,
+            power      => 2,
+            cutoff     => 20,
+            boost      => 0.7,
+            spatial    => 1,
+            lowquality => 1,
+         );
+         $i1-> type( $image-> type);
+         $image = IPA::Point::subtract( $image, $i1);
+         $w-> sb_text("saving $xmlname");
+      }   
+         
 
       my ( $iname, $ix, $iy, $path, $datestr, $xc, $yc, $objects, $i) = (
          $w->{file}, $image-> size, $w->{ini}->{path}, scalar(gmtime(time)),
@@ -1070,6 +1088,7 @@ POINTS
 
       print F "</morphology_data>\n";
       close F;
+      $w-> sb_text( 'saved ok.');
       $w-> modified( 0);
       $::application-> pointer( $waitPtr);
    } else {
@@ -1552,10 +1571,21 @@ sub opt_propcreate
         valignment => ta::Top,
         name       => 'TopText',
     ],[ CheckBox =>
-        origin => [ 5, 155],
+        origin => [ 5, 185],
         name => 'CalcBrightness',
         size => [ 300, 27],
         text => 'Calculate ~brightness',
+        onCheck => sub {
+           $nbpages-> EqualBrightness-> set(
+              checked => ($_[0]-> checked ? $nbpages-> EqualBrightness-> checked : 0),
+              enabled => $_[0]-> checked,
+           );
+        },   
+    ],[ CheckBox =>
+        origin => [ 5, 155],
+        name => 'EqualBrightness',
+        size => [ 300, 27],
+        text => 'E~qualize brightness',
     ],[ CheckBox =>
         origin => [ 5, 125],
         name => 'CalcConvex',
@@ -1593,7 +1623,7 @@ sub opt_propcreate
         name => 'HolesPercent',
         size => [ 100, 20],
     ],);
-   $nbpages-> TopText-> rect( 5, $nbpages-> CalcBrightness-> top, $nbpages-> width - 5, $nbpages-> height - 5);
+   $nbpages-> TopText-> rect( 5, $nbpages-> EqualBrightness-> top, $nbpages-> width - 5, $nbpages-> height - 5);
    $nbpages-> SigPce-> focusLink( $nbpages-> HolesPercent);
    $nbpages-> SigRot-> focusLink( $nbpages-> NumberOfRotations);
 
@@ -1643,11 +1673,14 @@ sub opt_proppush
    $w-> SUPER::opt_proppush( $dlg, $nb, $nbpages);
    my $nbc = $nbpages-> pageIndex;
    $nbpages-> pageIndex(3);
-   $nbpages-> CalcBrightness-> checked( $w->{ini}->{CalcBrightness});
-   $nbpages-> CalcConvex    -> checked( $w->{ini}->{CalcConvex});
-   $nbpages-> CalcHoles     -> checked( $w->{ini}->{CalcHoles});
-   $nbpages-> HolesPercent  -> value( $w->{ini}->{HolesPercent});
-   $nbpages-> NumberOfRotations-> value( $w->{ini}->{NumberOfRotations});
+   for ( qw( CalcBrightness EqualBrightness CalcConvex CalcHoles)) {
+      $nbpages->bring($_)->checked( $w->{ini}->{$_});
+   }   
+   $nbpages-> CalcBrightness-> notify(q(Check)); # force dependent disablements
+   $nbpages-> CalcHoles->      notify(q(Check)); 
+   for ( qw( HolesPercent NumberOfRotations)) {
+      $nbpages->bring($_)->value( $w->{ini}->{$_});
+   }   
    $nbpages-> pageIndex( $nbc);
    $dlg->{page3}->{NumberOfRotations} = $w->{ini}->{NumberOfRotations};
    my $i = 0;
@@ -1667,11 +1700,12 @@ sub opt_proppop
    my ( $w, $dlg, $nb, $nbpages, $mr) = @_;
    $w-> SUPER::opt_proppop( $dlg, $nb, $nbpages, $mr);
    if ( $mr) {
-      $w->{ini}->{CalcBrightness} = $nbpages-> CalcBrightness-> checked;
-      $w->{ini}->{CalcConvex    } = $nbpages-> CalcConvex    -> checked;
-      $w->{ini}->{CalcHoles     } = $nbpages-> CalcHoles     -> checked;
-      $w->{ini}->{HolesPercent  } = $nbpages-> HolesPercent  -> value;
-      $w->{ini}->{NumberOfRotations} = $nbpages-> NumberOfRotations-> value;
+      for ( qw( EqualBrightness CalcBrightness CalcConvex CalcHoles)) {
+         $w->{ini}->{$_} = $nbpages-> bring($_)-> checked;
+      }   
+      for ( qw( HolesPercent NumberOfRotations)) {
+         $w->{ini}->{$_} = $nbpages-> bring($_)-> value;
+      }   
       my $i;
       for ( $i = 0; $i < scalar @{$w-> {setColors}}; $i++) {
          $w->{ini}->{"LW$i"}  = $dlg-> {page2}-> {widths}->[$i];

@@ -46,6 +46,9 @@ sub win_newframe
 }
 
 
+# finds connections between points in @$exp and @$pts.
+# the arrays are being sorted.
+
 sub valid_comm_series
 {
    my ( $self, $exp, $pts) = @_;
@@ -173,7 +176,6 @@ sub win_ptremove
    my $to   = $w->{ini}->{forwardLookup} ? $max : $min;
    my $n = @{$w->{points}};
    
-
    my $ptIdx = $w-> rpt_is( @pt);
    die "Internal error $ptIdx $n | @pt" if !defined $ptIdx || $ptIdx >= $n;
    if ( $to == $from) {
@@ -185,6 +187,8 @@ sub win_ptremove
    }   
    # multiple frame case
    return unless $w-> win_saveframe;
+   $ptIdx = $w-> rpt_is( @pt); # points might be rearranged
+   
    return if Prima::MsgBox::message( "This will delete point [$pt[0], $pt[1]] from the current file up to and including ".
        $w-> win_formfilename( $to) . ", heading " . 
         ( $w->{ini}->{forwardLookup} ? "forwards" : "backwards") .
@@ -319,8 +323,13 @@ EOF
    $statwin-> destroy;
    
    if ( $ok) {
+      # points might be rearranged again
+      $w->{points} = $cendata{$w->{fileNum}};
       splice( @{$w-> {points}}, $ptIdx, 2);
-      splice( @{$w-> {extraPoints}}, $ptIdx, 2) if defined $w->{extraPoints};
+      if (defined $w->{extraPoints}) {
+         $w->{extraPoints} = $cendata{$w->{fileNum} + $incr};
+         splice( @{$w-> {extraPoints}}, $ptIdx, 2);
+      }   
       $w-> IV-> repaint;
       Prima::MsgBox::message("Queue processed", mb::OK|mb::Information);
    } elsif ( defined $jump) {
@@ -881,6 +890,11 @@ my $w = CenWindow-> create(
       ImageAppWindow::winmenu_file(),
       $wedt,
       ImageAppWindow::winmenu_view(),
+      [],["~Help" => [
+         ["~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
+         ["~Contents" => sub { $_[0]-> open_help(); }],
+      ]],
+      
    ],
    accelItems => [
       [ Space => 0, 0, kb::Space => sub{
