@@ -1,3 +1,21 @@
+use Config;
+use File::Basename qw(basename dirname);
+chdir(dirname($0));
+($file = basename($0)) =~ s/\.PL$//;
+$file =~ s/\.pl$//
+	if ($Config{'osname'} eq 'VMS' or
+	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+open OUT,">$file" or die "Can't create $file: $!";
+chmod(0755, $file);
+print "Extracting $file (with variable substitutions)\n";
+
+print OUT <<"!GROK!THIS!";
+$Config{'startperl'} -w
+
+!GROK!THIS!
+
+print OUT <<'!NO!SUBS!';
+
 use strict;
 use Prima;
 use Prima::Application name => "Morphometry I";
@@ -2617,3 +2635,5 @@ $w-> menu-> EditInvertImage-> check if $w-> {ini}-> {InvertImage};
 $w-> win_extwarn;
 
 run Prima;
+
+!NO!SUBS!

@@ -1,3 +1,21 @@
+use Config;
+use File::Basename qw(basename dirname);
+chdir(dirname($0));
+($file = basename($0)) =~ s/\.PL$//;
+$file =~ s/\.pl$//
+	if ($Config{'osname'} eq 'VMS' or
+	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+open OUT,">$file" or die "Can't create $file: $!";
+chmod(0755, $file);
+print "Extracting $file (with variable substitutions)\n";
+
+print OUT <<"!GROK!THIS!";
+$Config{'startperl'} -w
+
+!GROK!THIS!
+
+print OUT <<'!NO!SUBS!';
+
 use strict;
 use Prima;
 use Prima::Application name => "PrLenS";
@@ -451,6 +469,18 @@ sub show_stats {
    }
 }
 
+sub file_backup
+{
+   my $w = $_[0];
+   my ( $cpm, $file) = ( $w-> {cypherMask}, $w-> win_extname( $w-> {file}));
+   $file =~ s/\d{$cpm}(\.pls)$/$1/;
+   return if Prima::MsgBox::message( "Copy $file to $file.bak?", mb::OKCancel) != mb::OK;
+   return if -f "$file.bak" and Prima::MsgBox::message( "$file.bak exists. Overwrite?", mb::OKCancel) != mb::OK;
+   require File::Copy;
+   return if File::Copy::copy( $file, "$file.bak");
+   Prima::MsgBox::message( "Error:$!", mb::OK|mb::Error);
+}
+
 sub draw_processes {
    my $w = $_[0];
    $w-> done_draw_mode;
@@ -544,6 +574,7 @@ sub win_framechanged
    my $canApply = defined $i && $i-> type == im::Byte;
 
    $w-> menu-> FileStats-> enabled( $i);
+   $w-> menu-> FileBackup-> enabled( $i);
    $w-> menu-> EditProcess-> enabled( $canApply);   
    $w-> menu-> EditProcessSeries-> enabled( $canApply);   
    $tb-> MarkCells-> enabled( $i);
@@ -1129,6 +1160,7 @@ sub win_rec_updatevalues
    $i-> {C_min_area}  = $r-> Area-> value;
    $i-> {C_dilations} = $r-> Dilations-> value;
    $i-> {C_erosions}  = $r-> Erosions-> value;
+   $i-> {C_cell_radius}  = $r-> Radius-> value;
 }
 
 sub win_showrec
@@ -1160,6 +1192,7 @@ sub win_showrec
      $r-> Area-> value      ( $i-> {C_min_area});
      $r-> Dilations-> value ($i-> {C_dilations});
      $r-> Erosions-> value  ( $i-> {C_erosions});
+     $r-> Radius-> value  ( $i-> {C_cell_radius});
      $w-> win_framechanged;
   }
   $w-> {recWindow}-> bring_to_front;
@@ -1494,6 +1527,7 @@ sub opt_keys
       EditProcessSeries  => [ kb::NoKey,           'Markup series of processeses automatically'],
       EditRecSetup       => [ '@R',                'Display recognition setup dialog'],
       FileStats          => [ '@S',                'Invoke statistic data dialog'],
+      FileBackup         => [ kb::NoKey,           'Backup current series data'],
       HelpAbout          => [ kb::NoKey,           'Standard about box'],
       HelpPlabApps       => [ kb::NoKey,           'Online PlabApps overview'],
       HelpContents       => [ kb::NoKey,           'Online PrLenS overview'],
@@ -1681,6 +1715,7 @@ package Run;
 my $wfil = ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -1, 0,
    [ '-FileStats'  => "~Statistics"   => q(show_stats)],
+   [ '-FileBackup' => "~Backup results" => q(file_backup)],
    [],
    
 );
@@ -1717,6 +1752,4 @@ $w-> win_extwarn;
 
 run Prima;
 
-
-
-
+!NO!SUBS!

@@ -7,7 +7,8 @@ my @programs_to_install = qw(ManCen MorphometryI PrLenS PrAverB);
 WriteMakefile(
     'NAME'	=> 'PLab::Prima::ImageApp',
     'VERSION_FROM' => 'lib/PLab/Prima/ImageApp.pm', # finds $VERSION
-    'EXE_FILES'    => [ map {("bin/$_.PL")} @programs_to_install ],
+    'EXE_FILES'    => [ map {("bin/$_")} @programs_to_install ],
+    'PL_FILES'     => { map {("bin/$_.PL" => "bin/$_")} @programs_to_install },
     'dist'         => {COMPRESS => 'gzip -9f',
 		      SUFFIX   => '.gz',
 		      DIST_DEFAULT => 'all tardist',
