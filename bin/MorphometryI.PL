@@ -7,6 +7,7 @@ use Prima::Edit;
 use IPA::Local;
 use IPA::Point;
 use IPA::Global;
+use IPA::Misc;
 use XML::Parser;
 
 $::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
@@ -435,6 +436,7 @@ sub win_framechanged
    $w-> menu-> Contours-> enabled( defined $i);
    $w-> menu-> Apply-> enabled( $canApply);
    $w-> menu-> Validate-> enabled( defined $i);
+   $w-> menu-> Import-> enabled( defined $i);
    $w-> ToolBar-> Contours-> enabled( defined $i);
    if ( $w-> {recWindow}) {
       my $r = $w-> {recWindow};
@@ -695,6 +697,82 @@ sub win_xmlerror
    $w-> win_abortpacket;
 }
 
+sub win_xmlload
+{
+   my ( $w, $xmlname, %profile) = @_;
+   my %state = (
+      feats  => [],
+      backs  => [],
+      points => [],
+   );
+   my ( $n0, $n1, $n2) = ( $w-> menu-> text(0), $w-> menu-> text(1), 'point');
+   $n0 =~ s[\~][]g;
+   $n0 = lc $n0;
+   $n1 =~ s[\~][]g;
+   $n1 = lc $n1;
+   my @is;
+   @is = $w-> IV-> image-> size if $w->IV-> image;
+
+   my $objsub = $profile{onObject};
+   
+   my $xml = new XML::Parser(
+      Handlers => {
+         Start => sub {
+            my ($obj, $el, %attrs) = @_;
+            return if $state{finished_header};
+            if ($el eq 'morphology_data') {
+               return if $state{seen_header};
+               $state{morphology_data} = {%attrs};
+               $state{seen_header} = 1;
+            } elsif ( $el eq 'object') {
+               return unless $state{seen_header};
+               return if $state{reading_object};
+               $state{reading_object} = 1;
+               for ( qw( type x y)) {
+                  die "No tag:$_" unless defined $attrs{$_};
+               }
+               if ( $objsub) {
+                  $_ = $objsub-> ( \%attrs, $n0, $n1);
+                  return if $_ && $_ eq 'nocalc';
+               }   
+               
+               if ( $attrs{type} eq $n0 || $attrs{type} eq $n1) {
+                  my @xs = split( ' ', $attrs{x});
+                  my @ys = split( ' ', $attrs{y});
+                  return if scalar @xs != scalar @ys;
+                  my @poly = ();
+                  my $i;
+                  for ( $i = 0; $i < scalar @xs; $i++) {
+                     next if $xs[$i] < 0 || $ys[$i] < 0;
+                     next if scalar( @is) && ( $xs[$i] >= $is[0] || $ys[$i] >= $is[1]);
+                     next if scalar @poly and $xs[$i] == $poly[-2] and $ys[$i] == $poly[-1];
+                     push( @poly, $xs[$i], $ys[$i]);
+                  }
+                  $i = $attrs{type} eq $n0 ? $state{feats} : $state{backs};
+                  push ( @$i, \@poly) if scalar @poly > 3;
+               } elsif ( $attrs{type} eq $n2) {
+                  return if $attrs{x} < 0 || $attrs{y} < 0;
+                  return if scalar( @is) && (  $attrs{x} >= $is[0] || $attrs{y} >= $is[1]);
+                  push( @{$state{points}}, $attrs{x}, $attrs{y});
+               }
+            } else {
+               $state{has_extras} = 1;
+            }
+         },
+         End => sub {
+            my ($obj, $el) = @_;
+            $state{finished_header} = 1 if $el eq 'morphology_data';
+            $state{reading_object}  = 0 if $el eq 'object';
+         },
+      });
+   eval { parsefile $xml $xmlname; };
+   if ($@) {
+      $w-> win_xmlerror( $xmlname);
+      return 0;
+   }
+   return \%state;
+}   
+
 sub win_newframe
 {
    my $w = $_[0];
@@ -712,80 +790,29 @@ sub win_newframe
    $w-> {file} =~ m{[/\\]([^/\\]*)$};
    my $iname = $1;
 
-   my %state = ();
-   my @feats   = ();
-   my @backs   = ();
-   my @points  = ();
-   my ( $n0, $n1, $n2) = ( $w-> menu-> text(0), $w-> menu-> text(1), 'point');
-   $n0 =~ s[\~][]g;
-   $n0 = lc $n0;
-   $n1 =~ s[\~][]g;
-   $n1 = lc $n1;
    my @is = $w-> IV-> image-> size;
-   my @icalib = (0,0);
 
-   my $xml = new XML::Parser(
-      Handlers => {
-         Start => sub {
-            my ($obj, $el, %attrs) = @_;
-            return if $state{finished_header};
-            if ($el eq 'morphology_data') {
-               return if $state{seen_header};
-               for ( qw( imagename imagewidth imageheight xcalib ycalib)) {
-                  die "No tag:$_" unless defined $attrs{$_};
-               }
-               $state{seen_header} = 1;
-               $state{image_mismatch} = 1 unless $attrs{imagename}   eq $iname;
-               $state{image_mismatch} = 1 unless $attrs{imagewidth}  == $is[0];
-               $state{image_mismatch} = 1 unless $attrs{imageheight} == $is[1];
-               $icalib[0] = $attrs{xcalib};
-               $icalib[1] = $attrs{ycalib};
-            } elsif ( $el eq 'object') {
-               return unless $state{seen_header};
-               return if $state{reading_object};
-               $state{reading_object} = 1;
-               for ( qw( type x y)) {
-                  die "No tag:$_" unless defined $attrs{$_};
-               }
-               if ( $attrs{type} eq $n0 || $attrs{type} eq $n1) {
-                  my @xs = split( ' ', $attrs{x});
-                  my @ys = split( ' ', $attrs{y});
-                  return if scalar @xs != scalar @ys;
-                  my @poly = ();
-                  my $i;
-                  for ( $i = 0; $i < scalar @xs; $i++) {
-                     next if $xs[$i] < 0 || $ys[$i] < 0 || $xs[$i] >= $is[0] || $ys[$i] >= $is[1];
-                     next if scalar @poly and $xs[$i] == $poly[-2] and $ys[$i] == $poly[-1];
-                     push( @poly, $xs[$i], $ys[$i]);
-                  }
-                  $i = $attrs{type} eq $n0 ? \@feats : \@backs;
-                  push ( @$i, \@poly) if scalar @poly > 3;
-               } elsif ( $attrs{type} eq $n2) {
-                  return if $attrs{x} < 0 || $attrs{y} < 0 || $attrs{x} >= $is[0] || $attrs{y} >= $is[1];
-                  push( @points, $attrs{x}, $attrs{y});
-               }
-            } else {
-               $state{has_extras} = 1;
-            }
-         },
-         End => sub {
-            my ($obj, $el) = @_;
-            $state{finished_header} = 1 if $el eq 'morphology_data';
-            $state{reading_object}  = 0 if $el eq 'object';
-         },
-      });
-   eval { parsefile $xml $xmlname; };
-   if ($@) {
+   my $state = $w-> win_xmlload( $xmlname);
+   return unless $state;
+
+   for ( qw( imagename imagewidth imageheight xcalib ycalib)) {
+      next if defined $state->{morphology_data}->{$_};
+      $@ = "Tag $_ not present into morphology_data section.\n";
       $w-> win_xmlerror( $xmlname);
-      return;
-   }
+   }   
 
-   if ( $state{image_mismatch} && !$w->{silence}) {
+   if ( !$w->{silence} && (
+         ($state->{morphology_data}->{imagename}  ne $iname) ||
+         ($state->{morphology_data}->{imagewidth}  != $is[0]) ||
+         ($state->{morphology_data}->{imageheight} != $is[1])
+      )) {
       return if Prima::MsgBox::message( "There were minor data inconsistency in $xmlname. Load it anyway?",
          mb::YesNo|mb::Warning
       ) == mb::No;
    }
 
+  
+   my @icalib = ($state->{morphology_data}->{xcalib} , $state->{morphology_data}->{ycalib});
    if ( $icalib[0] != $w->{ini}->{XCalibration} || $icalib[1] != $w->{ini}->{YCalibration}) {
       if ( $w->{silence} || ( Prima::MsgBox::message("Image contains calibrations [@icalib] opposite to current [".
           $w->{ini}->{XCalibration}.' '.$w->{ini}->{YCalibration}.']. '.
@@ -798,11 +825,15 @@ sub win_newframe
       }
    }
 
-   $w-> {points} = \@points if scalar @points;
-   $w-> {lineStorage}->[0] = \@feats if scalar @feats;
-   $w-> {lwStorage}->[0]   = [(1) x scalar @feats] if scalar @feats;
-   $w-> {lineStorage}->[1] = \@backs if scalar @backs;
-   $w-> {lwStorage}->[1]   = [(1) x scalar @backs] if scalar @backs;
+   $w-> {points} = $state->{points} if scalar @{$state->{points}};
+   if ( scalar @{$state->{feats}}) {
+      $w-> {lineStorage}->[0] = $state->{feats};
+      $w-> {lwStorage}->[0]   = [(1) x scalar @{$state->{feats}}];
+   }
+   if ( scalar @{$state->{backs}}) {
+      $w-> {lineStorage}->[1] = $state->{backs};
+      $w-> {lwStorage}->[1]   = [(1) x scalar @{$state->{backs}}];
+   }
 }
 
 use constant PI => 4 * atan2 1, 1;
@@ -942,9 +973,10 @@ BODY
                    edgeSize => $w->{ini}->{EdgeSize},
                    minArea  => $w->{ini}->{MinArea},
                    maxArea  => $w->{ini}->{MaxArea},
-                );
-                my $n = int($img-> sum / 255);
-     	   my ($sum,$sum2);
+                ); # XXX do we really need area_filter here?
+                my $n = int($img-> sum / 255); # amount of significant pixels
+     	        my ($sum,$sum2);
+                my @pixarray = (0) x 256;
                 if ( $n != 0) {
                    $img = IPA::Point::mask( $img,
                       test => 255,
@@ -953,12 +985,15 @@ BODY
                    );
                    $sum = $img-> sum;
                    $sum2 = $img-> sum2;
+                   @pixarray = IPA::Misc::histogram( $img);
+                   $pixarray[0] -= $img-> width * $img-> height - $n;
                 }
                 $img-> destroy;
                 print F <<BRIGHT;
    brightnessN = "$n"
    brightnessSum = "$sum"
    brightnessSum2 = "$sum2"
+   histogram = "@pixarray"
 BRIGHT
                    $w-> sb_text( int( $objCount / $objects * 100).'%');
              }
@@ -1024,12 +1059,11 @@ PARAMS
       my $ww = $w-> {points};
       if ( defined $ww) {
          for ( $i = 0; $i < scalar @$ww; $i+=2) {
-            print F <<POINTS;
+            print F <<POINTS;          
 <object type = "point"
   x = "$$ww[$i]"
   y = "$$ww[$i+1]"
-/>
-
+\/>
 POINTS
          }
       }
@@ -1057,46 +1091,54 @@ sub win_newextras
    return unless defined $w-> {prevFile};
    my $num = $w->{cypherMask};
    my $xmlname;
-   # $xmlname = $w-> win_findnext( -$w->{fileNum});
    my ( $min, $max) = $w-> win_getseriesrange;
    $xmlname = $w-> win_formfilename( $min);
    $xmlname = $w-> win_extname( $xmlname);
 
    return unless -f $xmlname;
-   my %state = ();
-   my @points  = ();
 
-   my $xml = new XML::Parser(
-      Handlers => {
-         Start => sub {
-            my ($obj, $el, %attrs) = @_;
-            return if $state{finished_header};
-            if ($el eq 'morphology_data') {
-               return if $state{seen_header};
-               $state{seen_header} = 1;
-            } elsif ( $el eq 'object') {
-               return unless $state{seen_header};
-               return if $state{reading_object};
-               $state{reading_object} = 1;
-               for ( qw( type x y)) {
-                  die "No tag:$_" unless defined $attrs{$_};
-               }
-               push( @points, $attrs{x}, $attrs{y}) if $attrs{type} eq 'point';
-            }
-         },
-         End => sub {
-            my ($obj, $el) = @_;
-            $state{finished_header} = 1 if $el eq 'morphology_data';
-            $state{reading_object}  = 0 if $el eq 'object';
-         },
-      });
-   eval { parsefile $xml $xmlname; };
-   if ($@) {
-      return;
-   }
-   $w-> {extraPoints} = \@points if scalar @points;
+   my $state = $w-> win_xmlload( $xmlname);
+   return unless $state;
+   $w-> {extraPoints} = $state-> {points} if scalar @{$state-> {points}};
 }
 
+sub win_importextras
+{
+   my $w   = $_[0];
+   $w-> iv_cancelmode( $w-> IV);
+   my $d   = $w-> dlg_file(
+      cwd         => 1,
+      directory   => $w->{ini}->{path},
+      filterIndex => 0,
+      multiSelect => 0,
+      filter    => [
+         ['Data files' => '*.xml'],
+         ['All files' => '*']
+      ],
+   );
+   return 0 unless $d-> execute;
+   my $state = $w-> win_xmlload( $d-> fileName);
+   return unless $state;
+   my $x = 0;
+   if ( scalar @{$state->{feats}}) {
+      $w-> {lineStorage}->[0] = [] unless defined $w->{lineStorage}->[0]; 
+      $w-> {lwStorage}->[0]   = [] unless defined $w->{lwStorage}->[0]; 
+      push( @{$w-> {lineStorage}->[0]}, @{$state->{feats}});
+      push( @{$w-> {lwStorage}->[0]},   (1) x scalar @{$state->{feats}});
+      $x |= 1;
+   }
+   if ( scalar @{$state->{backs}}) {
+      $w-> {lineStorage}->[1] = [] unless defined $w->{lineStorage}->[0]; 
+      $w-> {lwStorage}->[1]   = [] unless defined $w->{lwStorage}->[0]; 
+      push( @{$w-> {lineStorage}->[1]}, @{$state->{backs}});
+      push( @{$w-> {lwStorage}->[1]},   (1) x scalar @{$state->{backs}});
+      $x |= 2;
+   }
+   return unless $x; # no contours to import
+   $w-> pt_updatemenu;
+   $w-> IV-> repaint;
+   $w-> modified(1);
+}   
 
 sub win_closeextras
 {
@@ -1223,119 +1265,82 @@ sub opt_statistics
    if ( defined $w-> {file}) {
       return unless $w-> win_saveframe;
    }
-   my $dir = eval { Cwd::abs_path( $w-> {ini}-> {path})};
-   $dir = '.' if $@;
-   $dir = '' unless -d $dir;
-   my $d = $w-> {fileDlg} ? $w-> {fileDlg} : Prima::OpenDialog-> create(
-      owner     => $w,
-      directory => $dir,
+   my $d = $w-> dlg_file(
+      cwd       => 1,
+      directory => $w-> {ini}-> {path},
+      filter    => [
+         ['Data files' => '*.xml'],
+         ['All files' => '*']
+      ],
+      multiSelect => 1,
+      filterIndex => 0,
    );
-   $d-> filter([
-      ['Data files' => '*.xml'],
-      ['All files' => '*']
-   ]);
-   $d-> multiSelect( 1);
-   $d-> filterIndex( 0);
-   $w-> {fileDlg} = $d;
-
    my @res = $d-> execute;
-
    return unless @res;
-
-   my ( $n0, $n1) = ( $w-> menu-> text(0), $w-> menu-> text(1));
-   $n0 =~ s[\~][]g;
-   $n0 = lc $n0;
-   $n1 =~ s[\~][]g;
-   $n1 = lc $n1;
 
    my %dataCommon = ();
    my %dataFore   = ();
    my %dataBack   = ();
+   my @dataHist;
    my %disabled = map {$_=>1} qw(x y type brightnessN brightnessSum brightnessSum2
-      xcentroid ycentroid fxcentroid fycentroid harea
+      xcentroid ycentroid fxcentroid fycentroid harea histogram
       convex_xcentroid convex_ycentroid convex_fxcentroid convex_fycentroid
       );
    my $index = 0;
    my $statCount = 4;
 
 
-   for ( @res) {
-      my $xmlname = $_;
-      my %state = ();
-
-      my $xml = new XML::Parser(
-      Handlers => {
-         Start => sub {
-            my ($obj, $el, %attrs) = @_;
-            return if $state{finished_header};
-            if ($el eq 'morphology_data') {
-               return if $state{seen_header};
-               $state{seen_header} = 1;
-            } elsif ( $el eq 'object') {
-               return unless $state{seen_header};
-               return if $state{reading_object};
-               $state{reading_object} = 1;
-               for ( qw( type )) {
-                  die "No tag:$_" unless defined $attrs{$_};
-               }
-               if ( $attrs{type} eq $n0 || $attrs{type} eq $n1) {
-                  my $stref = $attrs{type} eq $n0 ? \%dataFore : \%dataBack;
-                  if ( 3 == grep {exists $attrs{$_}} qw{brightnessN brightnessSum brightnessSum2}) {
-                     $stref->{brightness} = [(0) x $statCount] unless defined $stref->{brightness};
-                     $stref->{brightness}-> [0] += $attrs{brightnessN};
-                     $stref->{brightness}-> [1] += $attrs{brightnessSum};
-                     $stref->{brightness}-> [2] += $attrs{brightnessSum2};
-                     # XXX warning - bogus data for backgrounds !!
-                     $stref->{brightness}-> [$statCount + $index] = $attrs{brightnessSum} / $attrs{brightnessN};
-                  }
-                  my $area = $attrs{area};
-                  if ( exists $attrs{area} && exists $attrs{harea} && $attrs{type} eq $n0) {
-                     my $nh = 0;
-                     my $tharea = 0;
-                     my $minArea = $area * $w->{ini}->{HolesPercent} / 100;
-                     my @holz = split ' ', $attrs{harea};
-                     for my $harea ( @holz) {
-                        next if $harea < $minArea;
-                        $nh++;
-                        $tharea += $harea;
-                     }
-                     $dataCommon{process_index} = [(0) x $statCount]
-                        unless defined $dataCommon{process_index};
-                     $dataCommon{process_index}-> [0]++;
-                     $dataCommon{process_index}-> [1] += $nh;
-                     $dataCommon{process_index}-> [2] += $nh * $nh;
-                     $dataCommon{process_index}-> [$statCount + $index] = $nh;
-                     $dataCommon{process_domain} = [(0) x $statCount]
-                        unless defined $dataCommon{process_domain};
-                     $dataCommon{process_domain}-> [0]++;
-                     $dataCommon{process_domain}-> [1] += $tharea;
-                     $dataCommon{process_domain}-> [2] += $tharea * $tharea;
-                     $dataCommon{process_domain}-> [$statCount + $index] = $tharea;
-                  }
-                  for ( keys %attrs) {
-                     next if $disabled{$_};
-                     $dataCommon{$_} = [(0) x $statCount] unless defined $dataCommon{$_};
-                     $dataCommon{$_}-> [0]++;
-                     $dataCommon{$_}-> [1] += $attrs{$_};
-                     $dataCommon{$_}-> [2] += $attrs{$_} * $attrs{$_};
-                     $dataCommon{$_}-> [$statCount + $index] = $attrs{$_};
-                  }
-               }
-               $index++ if $attrs{type} eq $n0;
+   for my $xmlname ( @res) {
+      my $state = $w-> win_xmlload( $xmlname, onObject => sub {
+         my ( $attrs, $n0, $n1) = @_;
+         if ( $attrs->{type} eq $n0 || $attrs->{type} eq $n1) {
+            my $stref = $attrs->{type} eq $n0 ? \%dataFore : \%dataBack;
+            if ( 3 == grep {exists $attrs->{$_}} qw{brightnessN brightnessSum brightnessSum2}) {
+               $stref->{brightness} = [(0) x $statCount] unless defined $stref->{brightness};
+               $stref->{brightness}-> [0] += $attrs->{brightnessN};
+               $stref->{brightness}-> [1] += $attrs->{brightnessSum};
+               $stref->{brightness}-> [2] += $attrs->{brightnessSum2};
+               # XXX warning - bogus data for backgrounds !!
+               $stref->{brightness}-> [$statCount + $index] = $attrs->{brightnessSum} / $attrs->{brightnessN};
             }
-         },
-         End => sub {
-            my ($obj, $el) = @_;
-            $state{finished_header} = 1 if $el eq 'morphology_data';
-            $state{reading_object}  = 0 if $el eq 'object';
-         },
-      });
-      eval { parsefile $xml $xmlname; };
+            return if $attrs->{type} eq $n1; # no background relevant data further
 
-      if ($@) {
-         $w-> win_xmlerror( $xmlname);
-         return;
-      }
+            push @dataHist, exists( $attrs->{histogram}) ? [split(' ', $attrs->{histogram})] : undef;
+            if ( exists $attrs->{area} && exists $attrs->{harea}) {
+               my $nh = 0;
+               my $tharea = 0;
+               my $minArea = $attrs->{area} * $w->{ini}->{HolesPercent} / 100;
+               my @holz = split ' ', $attrs->{harea};
+               for my $harea ( @holz) {
+                  next if $harea < $minArea;
+                  $nh++;
+                  $tharea += $harea;
+               }
+               $dataCommon{process_index} = [(0) x $statCount]
+                  unless defined $dataCommon{process_index};
+               $dataCommon{process_index}-> [0]++;
+               $dataCommon{process_index}-> [1] += $nh;
+               $dataCommon{process_index}-> [2] += $nh * $nh;
+               $dataCommon{process_index}-> [$statCount + $index] = $nh;
+               $dataCommon{process_domain} = [(0) x $statCount]
+                  unless defined $dataCommon{process_domain};
+               $dataCommon{process_domain}-> [0]++;
+               $dataCommon{process_domain}-> [1] += $tharea;
+               $dataCommon{process_domain}-> [2] += $tharea * $tharea;
+               $dataCommon{process_domain}-> [$statCount + $index] = $tharea;
+            }
+            for ( keys %{$attrs}) {
+               next if $disabled{$_};
+               $dataCommon{$_} = [(0) x $statCount] unless defined $dataCommon{$_};
+               $dataCommon{$_}-> [0]++;
+               $dataCommon{$_}-> [1] += $attrs->{$_};
+               $dataCommon{$_}-> [2] += $attrs->{$_} * $attrs->{$_};
+               $dataCommon{$_}-> [$statCount + $index] = $attrs->{$_};
+            }
+            $index++;
+         }
+      } );
+      return unless $state;
    }
 
    $dataCommon{brightness} = $dataFore{brightness} if defined $dataFore{brightness};
@@ -1395,7 +1400,7 @@ Statistics morphology data
 Calculated on $tm
 The following file$howmany used for data gathering:
 HR
-   $texts .= "   $_\n" for (@res);
+   $texts .= "   $_\n" for @res;
    $texts .= sprintf("Average background brightness: %.7g +/- %.7g (averaged by %d pixels)\n",
       $dataBack{brightness}->[1],
       $dataBack{brightness}->[3],
@@ -1436,6 +1441,41 @@ HR
       $meta2 .= sprintf( "$colsformat2$exformat2", $elabels[$i], @data);
    }
    $texts .= $divline;
+
+   if ( grep { defined $_ } @dataHist) { # print histogram only if available 
+      my $maxSpace = 3;
+      # calc. formatting space
+      for ( @dataHist) {
+         next unless defined $_;
+         for ( @$_) {
+            $maxSpace = length($_) if $maxSpace < length($_);
+         }   
+      }   
+      
+      $texts .= "\nBrightness histogram data\n";
+      $meta2 .= "\nBrightness histogram data\n";
+      my $xdivline = ('-' x ( 256 * ( $maxSpace + 1) + 8))."\n";
+      $texts .= $xdivline;
+      $meta2 .= $xdivline;
+      my $cfmt  = ("\%${maxSpace}d " x 256);
+      my $i = 0;
+      $texts .= sprintf( "  N | $cfmt |\n", 0..255);
+      $meta2 .= sprintf( "  N  $cfmt\n", 0..255);
+      $texts .= $xdivline;
+      $meta2 .= $xdivline;
+      for ( @dataHist) {
+         $i++;
+         unless ( defined $_) {
+            $texts .= sprintf( "%3d | N/A\n", $i);
+            $meta2 .= sprintf( "%3d  N/A\n", $i);
+            next;
+         }   
+         $texts .= sprintf( "%3d | $cfmt |\n", $i, @$_);
+         $meta2 .= sprintf( "%3d  $cfmt\n", $i, @$_);
+      }
+      $texts .= $xdivline;
+   }
+
 
    sub esummary
    {
@@ -2267,6 +2307,7 @@ package Run;
 my $wfil = ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -2, 0,
    [],
+   ['-Import' => "~Import contours" => q(win_importextras)],
    [ '-optcalib' => "~Recalculate series"  => q(opt_changecalib)],
    [ "~Calculate statistics"  => "Alt+C" => '@C' => q(opt_statistics)],
 );
@@ -2304,6 +2345,10 @@ my $w = MorphoWindow-> create(
       $wfil,
       $wedt,
       ImageAppWindow::winmenu_view(),
+      [],["~Help" => [
+         ["~About" => sub {Prima::MsgBox::message("PLab application series, Morphometry I, version 1.00", mb::OK|mb::Information)}],
+         ["~Contents" => sub { $_[0]-> open_help(); }],
+      ]],
    ],
    accelItems => [
       ( map {[ "lw$_" => $_ => "Alt+$_" => "\@$_" => q(win_objectlwmenuaction)]} 1..9),

@@ -177,6 +177,41 @@ sub dlg_okcancel
    );
 }
 
+sub dlg_file
+{
+   my ( $w, %profile) = @_;
+   my $d = $w-> {fileDlg} ? $w-> {fileDlg} : Prima::OpenDialog-> create(
+      owner     => $w,
+   );
+   if ( $profile{cwd}) {
+      my $dir = exists($profile{directory}) ? $profile{directory} : '.';
+      $dir = eval { Cwd::abs_path( $dir)};
+      $dir = '.' if $@;
+      $dir = '' unless -d $dir;
+      delete $profile{cwd};
+      $profile{directory} = $dir;
+   }   
+   if ( exists $profile{directory}) {
+      my $xd = eval { Cwd::abs_path( $d-> directory)};
+      $xd = '.' if $@;
+      $d-> directory( $profile{directory}) if $xd ne $profile{directory};
+      delete $profile{directory};
+   }
+   $d-> set( %profile);
+   $w-> {fileDlg} = $d;
+   return $d;
+}  
+
+sub open_help
+{
+   my ( $self, $address) = @_;
+   $address = 'http://raven.plab.ku.dk/plab/index.html' unless defined $address;
+   my $pg = $::application-> sys_action('browser');
+   Prima::MsgBox::message("No browsing facilities found. \nPlease point your browser to \n$address", 
+       mb::OK|mb::Warning), return unless $pg;
+   system( "$pg $address");
+}   
+
 # WIN
 
 sub modified
@@ -392,38 +427,29 @@ sub win_extraschanged
 sub win_openfile
 {
    my $w   = $_[0];
-   my $dir = eval { Cwd::abs_path( $w-> {ini}-> {path})};
-   $dir = '.' if $@;
-   $dir = '' unless -d $dir;
-   my $d = $w-> {fileDlg} ? $w-> {fileDlg} : Prima::OpenDialog-> create(
-      owner     => $w,
-      directory => $dir,
+   my $d   = $w-> dlg_file(
+      cwd         => 1,
+      directory   => $w->{ini}->{path},
+      filterIndex => 0,
+      multiSelect => 0,
+      filter      => [
+         ['Images' => '*.bmp;*.pcx;*.gif;*.jpg;*.png;*.tif'],
+         ['All files' => '*.*'],
+      ]
    );
-   if ( defined $w-> {fileDlg}) {
-      my $xd = eval { Cwd::abs_path( $d-> directory)};
-      $xd = '.' if $@;
-      $d-> directory( $dir) if $xd ne $dir;
-      if ( defined $w->{file} && $w-> {file} =~ /([^\\\/]*)$/) {
-         my $fname = $1;
-         my $i = 0;
-         my @items = @{$d-> Files-> items};
-         for ( @items) {
-            last if $fname eq $items[ $i];
-            $i++;
-         }
-         if ( $i <= @items) {
-            $d-> Files-> focusedItem( $i);
-            $d-> fileName( $fname);
-         }
+   if ( defined $w->{file} && $w-> {file} =~ /([^\\\/]*)$/) {
+      my $fname = $1;
+      my $i = 0;
+      my @items = @{$d-> Files-> items};
+      for ( @items) {
+         last if $fname eq $items[ $i];
+         $i++;
+      }
+      if ( $i <= @items) {
+         $d-> Files-> focusedItem( $i);
+         $d-> fileName( $fname);
       }
    }
-   $d-> filter([
-      ['Images' => '*.bmp;*.pcx;*.gif;*.jpg;*.png;*.tif'],
-      ['All files' => '*.*']
-   ]);
-   $d-> filterIndex( 0);
-   $d-> multiSelect( 0);
-   $w-> {fileDlg} = $d;
    return $w-> win_loadfile( $d->fileName) if $d-> execute;
    return 0;
 }
@@ -989,7 +1015,7 @@ sub iv_zbestfit
    my ( $w, $self) = @_;
    return unless $self->image;
    my @szA = $self->image->size;
-   my @szB = $self->get_active_area;
+   my @szB = $self->get_active_area(2);
    my $x = $szB[0]/$szA[0];
    my $y = $szB[1]/$szA[1];
    $self-> zoom( $x < $y ? $x : $y);

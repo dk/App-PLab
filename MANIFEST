@@ -7,6 +7,12 @@ bin/ManCen.PL
 bin/MorphometryI.PL
 bin/PrLenS.PL
 bin/PrAverB.PL
+html/bigview.gif
+html/mIc1.gif
+html/mIc2.gif
+html/index.html
+html/ManCen.html
+html/MorphometryI.html
 MANIFEST
 Makefile.PL
 test.pl
