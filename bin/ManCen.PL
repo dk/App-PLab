@@ -914,7 +914,7 @@ my $w = CenWindow-> create(
 );
 
 $w-> IV-> insert( Popup =>
-   auto  => 0,
+   autoPopup  => 0,
    name  => 'PointPopup',
    items => [
       [ "~Delete point to the series end" => sub {
