@@ -68,7 +68,7 @@ sub win_inidefaults
       active_datasets    => 2,
       dataset_0_name     => 'cells',
       dataset_1_name     => 'processes',
-      ( map { ( "dataset_${_}_name", "dataset " . ($_+1) ) } 2 .. MAXDATASET ),
+      ( map { ( "dataset_${_}_name", "dataset" . ($_+1) ) } 2 .. MAXDATASET ),
       visible_datasets   => 0xffff,
    );
 }
