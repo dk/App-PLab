@@ -204,13 +204,13 @@ sub load_info
                     \s+             # space
                     (\d\d)          # file number
                     ::              # delimiter
-                    ([\d\_\,]*)     # coordinates of cell marks
+                    ([\d_\,]*)     # coordinates of cell marks
                     ::              # delimiter
-                    ([\d\_\,]*)     # coordinates of processes marks
+                    ([\d_\,]*)     # coordinates of processes marks
                     (?:
                     ::              # delimiter
                        ((?:(?:[+-]?)(?=\d|\.\d)\d*(?:\.\d*)?(?:[Ee](?:[+-]?\d+))?\&)?) # average process length
-                       ([\d\_\,\+\-]*)
+                       ([\d_\,\+\-]*)
                        # hand-drawn branches
                    )?
                    $}x;
@@ -218,7 +218,7 @@ sub load_info
       $abl = '' unless defined $abl;
       $cbm = '' unless defined $cbm;
 
-      $cbm =~ tr[\_][\ ];
+      $cbm =~ tr[_][\ ];
       my @branches = split ',', $cbm;
       $abl =~ s{\&$}{};
 
@@ -230,11 +230,11 @@ sub load_info
       my ( $isCurrentFrame) = $fn == $w-> {fileNum};
 
       if ( $fn == $smin && !$isCurrentFrame) {
-         $ccm =~ tr[\_][\ ];
+         $ccm =~ tr[_][\ ];
          my @cells = split ',', $ccm;
          Prima::message("Bad number of cells") if scalar @cells != $nc;
 
-         $cpm =~ tr[\_][\ ];
+         $cpm =~ tr[_][\ ];
          my @processes = split ',', $cpm;
          Prima::message("Bad number of processes") if scalar @processes != $np;
 
@@ -246,11 +246,11 @@ sub load_info
       
       if ( $isCurrentFrame)
       {
-         $ccm =~ tr[\_][\ ];
+         $ccm =~ tr[_][\ ];
          my @cells = split ',', $ccm;
          Prima::message("Bad number of cells") if scalar @cells != $nc;
 
-         $cpm =~ tr[\_][\ ];
+         $cpm =~ tr[_][\ ];
          my @processes = split ',', $cpm;
          Prima::message("Bad number of processes") if scalar @processes != $np;
 
@@ -285,9 +285,9 @@ sub load_info
          }
          $w->{ branches} = $pb if $isCurrentFrame;
          $abl = sprintf "%.3f", $w-> calc_branches_length( $pb);
-         $ccm =~ tr[\ ][\_];
-         $cpm =~ tr[\ ][\_];
-         $cbm =~ tr[\ ][\_];
+         $ccm =~ tr[\ ][_];
+         $cpm =~ tr[\ ][_];
+         $cbm =~ tr[\ ][_];
          $info->{ $fn} = "$nc $np $fn\:\:$ccm\:\:$cpm\:\:$abl\&$cbm\n";
          undef @branches;
       }
@@ -326,7 +326,7 @@ sub save_info
             next unless scalar( @{ $branch}) > 1;
             $bb .= $comma;
             my ( $x, $y) = @{ $branch->[ 0]};
-            $bb .= "$x\_$y";
+            $bb .= "${x}_$y";
             my ( $i);
             for ( $i = 1; $i <= $#{ $branch}; $i++) {
                $bb .= sprintf "%+d%+d", $branch->[ $i]->[ 0] - $x, $branch->[ $i]->[ 1] - $y;
@@ -336,8 +336,8 @@ sub save_info
             $comma = ',';
          }
       }
-      $pp =~ tr{\ }{\_};
-      $cc =~ tr{\ }{\_};
+      $pp =~ tr{\ }{_};
+      $cc =~ tr{\ }{_};
       
       my $fnx = '%0' . $$w{cypherMask} . 'd';
       $fnx = sprintf $fnx, ( $w-> {fileNum} || 0);
