@@ -1,0 +1,119 @@
+<html>
+<title>Morphometry I manual</title>
+<h3>Morphometry I</h3>
+<p>
+The Morphometry application is used to acquire and gather morphological parameters from images.
+<p>
+
+<h3>Navigation</h3>
+<p>
+<b>Contours</b>
+<p>
+Program deals with object contours, which are used for gatheing information. Most usual way is to draw
+the contour upon the image. It's possible to draw lines and draw "freehand". Once left mouse button is pressed over
+the image, the "freehand" curve is drawn, and when released, the line mode is turned on - the marquee 
+thin line shows where line will be plotted. To stop drawing, press <Esc> or right mouse button.
+Any file operation aborts drawing session also.<br> The figure drawn in one session called contour.
+<p>
+
+<b>Undo</b>
+<p>
+There are provided three of undo commands. As far as mouse movement is recorded and set of straight lines,
+the first undo, "Undo drawing", erases last line drawn. <br>
+Second step is "Group undo", which erases the whole contour. Both of these operation are irreversible,
+so third step, "Undo dialog" bring an dialog that masters drawings in more flexible way.
+Command "Clear all drwaings" clear all contours, respectively.
+<p>
+<b>Objects and background</b>
+<p>
+Program is capable of collecting information of two different kinds of contours, namely
+<i>objects</i> and <i>backgrounds</i>. Their difference is only when calculations take place,
+in visual representaions they differs only in the color drawn. Default object color is green, background - 
+yellow. It could be changed in Preferences, Appearance bookmark.<p>
+
+Before program calculates data, it has to validate the contours drawn in some way. This is accomplished
+using image-processign algorithm, that leaves only closed contours. This function activated either by
+"Edit/Validate contours" command or implicitly when closing and image.<p>
+<img src="mIc1.gif">
+<img src="mIc2.gif"><p>
+The contour in picures above is an example of the algorithm.
+<p>
+As shown from above, to quickly get rid of the unneeded closed contour, it's enough to break it.
+For that purpose used third "pen", "Remove", which default color is white. All that drawn with "Remove" pen,
+applied to the image before the validation, so giving handy tool for corrections.<p>
+To switch to another pen, use "Edit/Object sets" menu selection. To the same purpose used the color rectangle
+between scrollbars, which, when clicked, changes it's color and current object set.
+<p>
+Contours are saved in .xml file. If needed to use contours that were drawn for another file, use
+"File/Import contours" command.
+<p>
+
+<b>Contours recognition</b>
+<p>
+"Edit/Recognintion setup" brings up the dialog that facilitates the automatic recognintion of the contours.
+It consists of five numberic fields, three partial preview buttons, "apply"  and "restore" buttons.<p>
+"Apply" command applies chain of image processing algorithms on the current image, with purpose of extracting
+contours automatically. 
+<p>First algorithm, <i>union find</i>, quanitzes 256 levels of gray into less, and its threshold given
+toggles whether the pixel belongs to some area or not. For example, if we have pixels with brighthess 105,110,115 and 120,
+and threshold is 10, pixels with brightness 105 and 110 will transform into area with average brigthness between 105 and 110,
+and will not include pixels with brightness below or above. The result of tteh algorighm shown by first preview button.
+<p>Second algorithm is <i>binary threshold</i>, which turns pixels below threshold to black, and above to white. Compound preview
+of these two algorithms could be seen by pressing secong preview button.<p>
+Third algorithm finds areas with minimal and maximal areas given ( in pixels), that could be contoured by line with width equal to
+"edge size" amount. It's preview button provides black and white image which conturs will be added to object set, when "apply"
+button pressed. If you see black or white image, that means no contours were found with given settings.
+<p>
+
+
+<b>Point anchors</b>
+<p>
+"Toggle point - drawings" command toggles between line plotting and point anchoring modes.
+It's possible to set points on every image, but if the points are set on the very first image in the series,
+then their location will be indicated by cross ( red by default) on every image in the continuous series.
+<p>
+
+<h3>Processing and calculations</h3>
+<p>
+
+The supplementary data is strored into filename with extension xml, which stands for 
+"eXtended Markup Language" and allows in this case storage of different contour characteristics.
+By default, no calculations ( except contour validation) is taken on image closure, but it's
+possible ( see "Edit/Properties/Calculations") tell the program to calculate certain parameters 
+after image is processed. These calculations are turned off by default because they require significanmt
+time to run. But once calculated, some morphological parameters are stored into .xml file along with
+contours. 
+<p>
+<b>Batch processing</b>
+<p>
+The program doesn't write any files and starts no calculations unless contours were changes.
+It will be laborous task if needed to recalculate parameters on the whole series, in case
+they are not present in the .xml files to that series, consequently loading, drawing, undoing and saving
+data. Instead, "Recalculate series" command subsequently loads, and saves images, and saves recalculated data.
+<p>
+<b>Statistics</b>
+<p>
+The program is also capable of calculating the statistics information, getting the data from sets of .xml files.
+The "Calculate statistics" command brings the dialog, that allows select set of .xml files. After files were selected,
+the calulation process is then started and it's results are shown in a separate window.
+<p>
+These result could be copies to the system clipboard by using "Copy" command, or saved to files as 
+different reports using "Export/Summary" and "Export/Experimental data" commands. Summary, as expected,
+is more brief and contains only averaged statistics.
+<p>
+Special statistics window keys:
+<ul>
+<li>Shift+navigation keys - select and area
+<li>Alt+L - select a line ( press twice on different lines to select more than one)
+<li>Alt+B - select a vertical block ( press twice in different positions)
+<li>Ctrl+Ins - copy selected block to the system clipboard
+</ul>
+<p>
+<h3>Productivity tips</h3>
+<p>
+Holding Shift key reveals brightness of a pixel under the mouse pointer.<p>
+It's possible to change line width when drawing a contour ("Edit/Preferences/Appearance").<p>
+Toolbar includes two extra icons - "Toggle points/contours" and "calculate statistics".<p>
+To calculate statistics it's no need to load an image.<p>
+
+</html>
