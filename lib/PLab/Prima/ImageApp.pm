@@ -8,8 +8,8 @@ use Carp;
 use Cwd qw(abs_path);
 
 use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
-              IniFile Sliders Utils Notebooks ComboBox Buttons Label
-              ColorDialog Contrib::ButtonGlyphs KeySelector);
+              IniFile Sliders Utils Notebooks ComboBox Buttons Label Outlines
+              ColorDialog Contrib::ButtonGlyphs KeySelector ImageDialog);
 use PLab;
 use Prima::Contrib::ButtonGlyphs;
 use PLab::Prima::ImageAppGlyphs;
@@ -18,7 +18,7 @@ no Prima::StartupWindow;
 
 package SerOpenDialog;
 use vars qw(@ISA);
-@ISA = qw(Prima::OpenDialog);
+@ISA = qw(Prima::ImageOpenDialog);
 
 sub init
 {
@@ -1015,28 +1015,46 @@ sub opt_propcreate
 
 # Keys
    my $optKeys = $w-> opt_keys;
-   $nb-> insert_to_page( 2, [ ListBox =>  
+   my %o_items;
+   for ( keys %$optKeys) {
+      m/^([A-Z][a-z]*)/;
+      push( @{$o_items{$1}}, [$_]);
+   }
+   $nb-> insert_to_page( 2, [ StringOutline  =>  
       origin => [ 10, 58],
       size   => [ 200, 222],
       name   => 'KeyList',
-      items  => [ sort keys %$optKeys, ],
+      items  => [ map {[ $_, $o_items{$_}]} sort keys %o_items ],
       onSelectItem => sub {
-         my ( $me, $signs, $state) = @_;
-         return unless $state;
-         my $key = $_[0]-> get_item_text( $_[0]-> focusedItem);
-         my $x = $w-> {keyMappings}-> {"Key_$key"};
+         my ( $me, $foc) = @_;
+         my ( $item, $lev) = $_[0]-> get_item( $foc);
+         return unless $item;
          $w-> {keyMappings_change} = 1;
-         $nbpages-> KeySelector-> key( $w-> {keyMappings}-> {"Key_$key"} );
+         unless ( ref($item->[1])) {
+            my $key = $_[0]-> get_item_text( $item);
+            my $x = $w-> {keyMappings}-> {"Key_$key"};
+            $nbpages-> KeySelector-> enabled(1);
+            $nbpages-> KeySelector-> key( $w-> {keyMappings}-> {"Key_$key"} );
+            $nbpages-> KeyDescription-> text( $optKeys-> {$key}-> [1] );
+            $nbpages-> KeySelector-> show;
+         } else {
+            $nbpages-> KeySelector-> hide;
+            $nbpages-> KeySelector-> enabled(0);
+            $nbpages-> KeyDescription-> text( '');
+         }
          delete $w-> {keyMappings_change};
-         $nbpages-> KeyDescription-> text( $optKeys-> {$key}-> [1] );
       },
   ], [ KeySelector =>  
       origin => [ 220, 110],
       size   => [ 150, 170],
       name   => 'KeySelector',
+      visible => 0,
       onChange => sub {
          return if $w-> {keyMappings_change};
-         my $okey = $nbpages-> KeyList-> get_item_text( $nbpages-> KeyList-> focusedItem); 
+         my $kl = $nbpages-> KeyList;
+         my ( $item, $lev) = $kl-> get_item( $kl-> focusedItem);
+         return unless $item;
+         my $okey = $kl-> get_item_text( $item);
          my $key = "Key_$okey";
          my $value = $_[0]-> key; 
          if ( $value != kb::NoKey) {
@@ -1084,9 +1102,11 @@ sub opt_propcreate
       text    => '~Default',
       hint    => 'Set default value for a key',
       onClick => sub {
+         my $kl = $nbpages-> KeyList;
+         my ( $item, $lev) = $kl-> get_item( $kl-> focusedItem);
+         return unless $item;
          $nbpages-> KeySelector-> key( Prima::AbstractMenu-> translate_shortcut(
-            $w-> opt_keys()-> {$nbpages-> KeyList-> get_item_text( 
-               $nbpages-> KeyList-> focusedItem)}-> [0])); 
+            $w-> opt_keys()-> {$kl-> get_item_text( $item)}-> [0])); 
       },
    ] );
    $nbpages-> KeyList-> focusedItem(0);
@@ -1171,7 +1191,7 @@ sub opt_proppop
       }
 # Keys      
       $w-> {keyMappings} = $w-> {keyMappings_save};
-      $nbpages-> KeyList-> notify(q(SelectItem), [$nbpages-> KeyList-> focusedItem], 1);
+      $nbpages-> KeyList-> notify(q(SelectItem), $nbpages-> KeyList-> focusedItem);
    }
    delete $w-> {keyMappings_save};
 }
