@@ -1,20 +1,23 @@
 use Config;
 use File::Basename qw(basename dirname);
 chdir(dirname($0));
-($file = basename($0)) =~ s/\.PL$//;
-$file =~ s/\.pl$//
-	if ($Config{'osname'} eq 'VMS' or
-	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+($file = basename($0)) =~ s/.PL$//;
+$file =~ s/.pl$//
+        if ($Config{'osname'} eq 'VMS' or
+            $Config{'osname'} eq 'OS2');  # "case-forgiving"
 open OUT,">$file" or die "Can't create $file: $!";
 chmod(0755, $file);
-print "Extracting $file (with variable substitutions)\n";
+print "Extracting $file (with variable substitutions)
+";
 
 print OUT <<"!GROK!THIS!";
 $Config{'startperl'} -w
-
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
+
+#!perl -w
+
 
 package MorphometryI;
 use strict;
@@ -785,7 +788,7 @@ sub fig_propdialog
        };
 
        $d = Prima::Dialog-> create(
-          size => [ 300, 320],
+          size => [ 400, 320],
           text => 'Spot properties',
           owner => $w,
           menuItems => [
@@ -807,7 +810,7 @@ sub fig_propdialog
        );
        $d-> insert( Label =>
           origin => [ 85, 10],
-          size   => [ 205, 36],
+          size   => [ 305, 36],
           name   => 'Text',
           wordWrap => 1,
        );
@@ -824,15 +827,14 @@ sub fig_propdialog
 
        $d-> insert( Slider =>
           origin => [ 10, 56],
-          size   => [ 280, 52],
+          size   => [ 380, 52],
           name   => 'Threshold',
           min    => 1,
           max    => 255,
           vertical => 0,
           increment => 50,
           ticks     => \@t,
-          step      => 1,
-          snap      => 1,
+          selectable => 1,
           onPostMessage => sub {
              my $self = $_[0];
              my $v    = $self-> value;
@@ -859,7 +861,7 @@ sub fig_propdialog
           },
        );
        $d-> insert( ImageViewer =>
-          origin  => [ 10, 122],
+          origin  => [ 60, 122],
           size    => [ 280, 192],
           vScroll => 0,
           hScroll => 0,
@@ -1134,3 +1136,4 @@ if ( $ImageApp::testing) {
 run Prima;
 
 !NO!SUBS!
+
