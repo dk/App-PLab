@@ -16,10 +16,13 @@ $Config{'startperl'} -w
 
 print OUT <<'!NO!SUBS!';
 
+#!/usr/bin/perl -w
+
 use strict;
 use Prima;
 use Prima::Application name => "PrLenS";
 use Prima::Edit;
+use Prima::ExtLists;
 use PLab::Prima::ImageApp;
 use PLab::Prima::Calibrations;
 use IPA::Local;
@@ -65,7 +68,8 @@ sub win_inidefaults
       active_datasets    => 2,
       dataset_0_name     => 'cells',
       dataset_1_name     => 'processes',
-      ( map { ( "dataset_${_}_name", "dataset " . ($_+1) ) } 2 .. MAXDATASET )
+      ( map { ( "dataset_${_}_name", "dataset " . ($_+1) ) } 2 .. MAXDATASET ),
+      visible_datasets   => 0xffff,
    );
 }
 
@@ -1643,7 +1647,8 @@ sub IV_Paint
 
    for ( 0 .. MAXDATASET) {
       my $layer = $w-> {layers}->[$_];
-      last unless defined $layer;
+      last unless defined($layer);
+      next unless ( 1 << $_) & $w->{ini}->{visible_datasets};
       my $color = ( $_ < 2 ) ? ucfirst $layer : "Dataset$_";
       $canvas-> color( $w-> {ini}-> {"Color_$color"});
       foreach (@{$w-> {$layer}}) {
@@ -1731,15 +1736,23 @@ sub opt_propcreate
        name    => 'ShowExtras',
        text    => '~Show extra markings',
        hint    => "If on, the markings on the first image in the series\nwill be displayed as crosses",
+   ], [ Label => 
+       origin  => [ 190, 130 ],
+       autoWidth => 1,
+       text      => 'Visible datasets',
+   ], [ CheckList => 
+       origin => [ 190, 55],
+       size   => [ 120, 75],
+       name   => 'Hyperset',
    ], [ SpinEdit => 
-       origin => [ 190, 105],
+       origin => [ 190, 160],
        width  => 120,
        min    => 2,
        max    => MAXDATASET,
        name   => 'Datasets',
        hint   => 'Number of visible types of data points sets. By default is 2, cells and processes', 
    ], [ Label => 
-       origin => [ 190, 125],
+       origin => [ 190, 180],
        autoWidth => 1,
        text      => 'Number of datasets',
    ]);
@@ -1852,6 +1865,9 @@ sub opt_proppush
    $nbpages-> nLines-> value( $w->{ini}->{nLines});
    $nbpages-> Datasets-> value( $w->{ini}->{active_datasets});
    $nbpages-> ShowExtras-> checked( $w-> {ini}-> {ShowExtras});
+   my $hs = $nbpages-> Hyperset;
+   $hs-> items( [ map { ucfirst } @{$w->{layers}} ]);
+   $hs-> vector( pack( 'I*', $w->{ini}-> {visible_datasets}));
    my $ssl = $nbpages-> StretchSlider;
    $ssl-> {saveMin} = $ssl-> {min} = $w->{ini}->{SpectrumMin};
    $ssl-> {saveMax} = $ssl-> {max} = $w->{ini}->{SpectrumMax};
@@ -1893,6 +1909,7 @@ sub opt_proppop
          $w->{ini}->{SpectrumMax} = $b;
          $w-> preprocess;
       }
+      $w-> {ini}-> {visible_datasets} = unpack('I*', $nbpages-> Hyperset-> vector);
       $w-> IV-> repaint;
    } else {
       if ( ($w->{ini}->{SpectrumMin} != $ssl-> {saveMin}) ||
