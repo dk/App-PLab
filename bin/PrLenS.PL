@@ -169,6 +169,7 @@ sub load_info
 
    while (<INFO>)
    {
+      s/\r$//;
       next if /^$/;
       if ( /^#\*/) {
           /^#\*([^\:]+)\:\s*(.*)$/;
