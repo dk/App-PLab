@@ -414,7 +414,7 @@ sub on_paint
    }
    if ( $w-> {selectedRect} && $me == $w-> {selectedRect} && !$iv->{transaction}) {
       my $c = $canvas-> color;
-      my $pc = $w->{selectionColor};
+      my $pc = $w->{ini}->{Color_Selection} + 0;
       $pc = ~($pc) & 0xFFFFFF;
       $canvas-> color( $pc);
       $canvas-> rop( rop::XorPut);
@@ -472,8 +472,6 @@ sub win_inidefaults
    my $w = $_[0];
    return (
       $w-> SUPER::win_inidefaults,
-      SelectionColor  => '0x808080',
-      AreaBorderColor => '0x008080',
       PropShowMode    => '1',
    );
 }
@@ -485,10 +483,6 @@ sub on_create
    my $w    = $_[0];
    $self-> SUPER::on_create;
    $self-> {dataExt} = 'pab';
-   for ( qw( selection areaBorder)) {
-      my $s1 = $_ . 'Color';
-      $self-> {$s1} = eval($self->{ini}-> {ucfirst $s1});
-   }
    $w-> {selectedRect} = undef;
    $w-> {rects} = [];
 
@@ -535,15 +529,6 @@ sub on_create
    );
 }
 
-sub on_destroy
-{
-   my ($w,$i) = ($_[0],$_[0]->{ini});
-   for ( qw( selection areaBorder)) {
-      my $s1 = $_ . 'Color';
-      $i-> { ucfirst $s1} = $w-> ini_makecolor( $w-> {$s1});
-   }
-   $w-> SUPER::on_destroy;
-}
 
 sub win_closeframe
 {
@@ -913,7 +898,7 @@ sub IV_xorrect
 {
    my ( $w, $self) = @_;
    my @r = @{$self->{xorData}};
-   my $pc = $w->{selectionColor};
+   my $pc = $w->{ini}->{Color_Selection} + 0;
    $pc = ~($pc) & 0xFFFFFF;
    $self-> begin_paint;
    $self-> set(
@@ -1054,7 +1039,7 @@ sub IV_Paint
    $self-> on_paint( $canvas);
    my $r = $w-> {rects};
    my $z = $self-> zoom;
-   $canvas-> color( $w->{areaBorderColor});
+   $canvas-> color( $w-> {ini}->{Color_AreaBorder});
    $canvas-> transform(0,0);
    for ( @$r) {
       $_-> on_paint( $w, $self, $canvas);
@@ -1063,24 +1048,26 @@ sub IV_Paint
 
 # OPT
 
-sub opt_colornames
+sub opt_colors
 {
-   return (
-       'Selection',
-       'Area border',
-   );
+   return {
+     'Selection'  => [ cl::Gray, 'Selection'],
+     'AreaBorder' => [ cl::Cyan, 'Area border'],
+   };
 }
 
-sub opt_colormount
+sub opt_keys
 {
-   my $w = $_[0];
-   unless ( $#_) {
-      return $w->{selectionColor}, $w->{areaBorderColor};
-   } else {
-      ( $w-> {selectionColor}, $w-> {areaBorderColor}) = @_[1..2];
-      $w-> IV-> repaint;
-   }
+   return {
+      %{$_[0]-> SUPER::opt_keys()},
+      FileSave       => [ kb::F2,              'Save frame layout'],
+      FilePrint      => [ '^P',                'Print current frame layout'],
+      EditDuplicate  => [ '^D',                'Duplicate selected rectange'], 
+      EditDelete     => [ kb::Delete       ,   'Delete selected rectange'], 
+      EditDeleteAll  => [ kb::NoKey        ,   'Delete all rectanges'], 
+   },
 }
+
 
 # OPT_END
 
@@ -1090,16 +1077,16 @@ package Run;
 my $wfile = ImageAppWindow::winmenu_file();
 splice( @{$$wfile[1]}, 8, 0,
    [],
-   ['-FileSave'  => "~Save"     => 'F2' => 'F2' => q(win_saveframe)],
-   ['-FilePrint' => "~Print..." => 'Ctrl+P' => '^P' => sub { $_[0]-> win_printframe(1); }],
+   ['-FileSave'  => "~Save"     => q(win_saveframe)],
+   ['-FilePrint' => "~Print..." => sub { $_[0]-> win_printframe(1); }],
 );
 
 
 my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
-   ["~Duplicate"    => 'Ctrl+D' => '^D' => q(win_figdup)],
-   ["De~lete"    => 'Del' => kb::Delete => q(win_figdelete)],
-   ["Delete ~all"   => q(win_figclear), ],
+   [ EditDuplicate => "~Duplicate"    => q(win_figdup)],
+   [ EditDelete    => "De~lete"       => q(win_figdelete)],
+   [ EditDeleteAll => "Delete ~all"   => q(win_figclear), ],
    [],
 );
 

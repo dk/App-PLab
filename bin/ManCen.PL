@@ -17,10 +17,6 @@ sub win_inidefaults
    my $w = $_[0];
    return (
       $w-> SUPER::win_inidefaults,
-      PointColor      => '0x00FF00',
-      ExtraPointColor => '0xFF0000',
-      PointerColor    => '0x000000',
-      LabelColor      => '0x000000',
       forwardLookup   => 0,
       lookupEnabled   => 0,
       StdPointerShape => 0,
@@ -43,6 +39,13 @@ sub win_newframe
       $w-> {points} = $w-> rpt_read( *F);
       close F;
    }
+}
+
+sub winmenu_updatemappings
+{
+   my $self = $_[0];
+   $self-> SUPER::winmenu_updatemappings();
+   $self-> menu-> EditTogglePoint-> key( kb::NoKey);
 }
 
 
@@ -420,11 +423,7 @@ sub on_create
    my $self = $_[0];
    my $w    = $_[0];
    $self-> SUPER::on_create;
-   $self-> {dataExt}        = 'cen';
-   $self-> {pointColor}     = eval($self->{ini}-> {PointColor});
-   $self-> {pointerColor}   = eval($self->{ini}-> {PointerColor});
-   $self-> {extraPointColor}= eval($self->{ini}-> {ExtraPointColor});
-   $self-> {labelColor}     = eval($self->{ini}-> {LabelColor});
+   $self-> {dataExt} = 'cen';
 
    $self-> win_pointerchanged();
 
@@ -436,7 +435,7 @@ sub on_create
       text        => '0:0',
       growMode    => gm::Client,
       transparent => 1,
-      color       => $self-> {labelColor},
+      color       => $self-> {ini}-> {Color_Label},
       alignment   => ta::Right,
       valignment  => ta::Center,
       font        => { style => fs::Bold },
@@ -450,7 +449,7 @@ sub on_create
       onPaint     => sub {
          my ( $self, $canvas) = @_;
          my ( $x, $y) = $canvas-> size;
-         $canvas-> color( $w-> {labelColor});
+         $canvas-> color( $w-> {ini}-> {Color_Label});
          my @pt = $w-> {ini}-> {forwardLookup} ? (
             0, 0.6, 0.5, 0.6, 0.5, 0.75, 0.9, 0.5, 0.5, 0.25, 0.5, 0.4, 0, 0.4
          ) : (
@@ -466,20 +465,10 @@ sub on_create
    );
 }
 
-sub on_destroy
-{
-   my ($w,$i) = ($_[0],$_[0]->{ini});
-   $i-> {PointColor}      = $w-> ini_makecolor( $w-> {pointColor});
-   $i-> {ExtraPointColor} = $w-> ini_makecolor( $w-> {extraPointColor});
-   $i-> {PointerColor}    = $w-> ini_makecolor( $w-> {pointerColor});
-   $i-> {LabelColor}      = $w-> ini_makecolor( $w-> {labelColor});
-   $w-> SUPER::on_destroy;
-}
-
 sub on_keydown
 {
    my ($me,$code,$key,$mod) = @_;
-   if ( $code == ord('x') || $code == ord('X')) {
+   if ( Prima::AbstractMenu-> translate_key( $code, $key, $mod) == $me-> {keyMappings}-> {Key_EditTogglePoint}) {
       $me-> IV-> notify( 'MouseDown', mb::Left, $mod, $me-> IV-> pointerPos);
       $me-> clear_event;
    }
@@ -494,7 +483,7 @@ sub win_pointerchanged
       return;
    }
 
-   my $color = $w-> {pointerColor};
+   my $color = $w-> {ini}-> {Color_Pointer};
    my ( $cx, $cy) = ( $::application-> get_system_value( sv::XPointer), $::application-> get_system_value( sv::YPointer));
    my $ic = Prima::Image-> create(
       width  => $cx,
@@ -541,30 +530,36 @@ sub win_pointerchanged
 # WIN_END
 # OPT
 
-sub opt_colornames
-{
-   return (
-       'Points',
-       'Crosses',
-       'Cursor and selection',
-       'Label'
-   );
-}
-
 sub opt_colormount
 {
    my $w = $_[0];
-   unless ( $#_) {
-      return $w->{pointColor}, $w->{extraPointColor}, $w->{pointerColor}, $w-> {labelColor};
-   } else {
-      ( $w-> {pointColor}, $w-> {extraPointColor}, $w-> {pointerColor}, $w-> {labelColor}) = @_[1..4];
-      $w-> IV-> repaint;
-      $w-> win_pointerchanged;
-      $w-> ToolBar-> PointRef-> color( $w-> {labelColor});
-      $w-> ToolBar-> Lookup-> color( $w-> {labelColor});
-   }
+   $w-> win_pointerchanged;
+   $w-> ToolBar-> PointRef-> color( $w-> {ini}-> {Color_Label});
+   $w-> ToolBar-> Lookup-> color( $w-> {ini}-> {Color_Label});
 }
 
+sub opt_colors
+{
+    return {
+       'Points'      => [ cl::LightGreen, 'Points'],
+       'ExtraPoints' => [ cl::LightRed,   'Crosses'],
+       'Pointer'     => [ cl::Black,      'Cursor and selection'],
+       'Label'       => [ cl::Black,      'Label'],
+    }
+}
+
+sub opt_keys
+{
+   return {
+      %{$_[0]-> SUPER::opt_keys()},
+      EditClearPoints  => [ kb::NoKey,      'Remove all points'],
+      EditTogglePoint  => [ 'x',            'Set or remove the point under cursor'],
+      EditToggleLookup => [ kb::Space,      'Turn on or off neighbour points lookup'],
+      HelpAbout        => [ kb::NoKey,      'Standard about box'],
+      HelpPlabApps     => [ kb::NoKey,      'Online PlabApps overview'],
+      HelpContents     => [ kb::NoKey,      'Online ManCen overview'],
+   }   
+}
 
 sub opt_propcreate
 {
@@ -591,7 +586,7 @@ sub opt_propcreate
    ] , [ CheckBox =>
        origin => [ 10, 130],
        size   => [ 300, 36],
-       text   => '~Display neighbour .cen - [Space]',
+       text   => '~Display neighbour .cen',
        name   => 'LookupEnabled',
        hint   => 'Draws next or previous data points with crosses',
    ]);
@@ -740,7 +735,7 @@ sub IV_xorrect
 {
    my ( $w, $self) = @_;
    my @r = @{$self->{xorData}};
-   my $pc = $w->{pointerColor};
+   my $pc = $w->{ini}->{Color_Pointer};
    $pc = (( $pc >> 16) & 0xFF) | ( $pc & 0xFF00) | (( $pc & 0xFF) << 16); # RGB => BGR
    $self-> begin_paint;
    $self-> set(
@@ -786,7 +781,7 @@ sub IV_MouseDown
       if ( $ax >= 0 && $ay >= 0 && $ax < $w->{IVx} && $ay < $w->{IVy}) {
          if ( $w-> rpt_toggle( $ax, $ay)) {
             $self-> begin_paint;
-            $self-> color( $w->{pointColor});
+            $self-> color( $w->{ini}->{Color_Points});
             my $p = ( 6 * $self-> zoom < 1) ? 1 : ( 6 * $self-> zoom);
             $self-> ellipse( $x, $y, $p, $p);
             $self-> end_paint;
@@ -853,7 +848,7 @@ sub IV_Paint
    $canvas-> transform( $self-> point2screen( 0, 0));
    if ( defined $wl) {
       my $i;
-      $canvas-> color( $w->{pointColor});
+      $canvas-> color( $w-> {ini}->{Color_Points});
       for ( $i = 0; $i < scalar @$wl; $i+=2) {
          my ( $x, $y) = @$wl[ $i, $i+1];
          $canvas-> ellipse( $x * $z, $y * $z, $p, $p);
@@ -862,7 +857,7 @@ sub IV_Paint
    $wl = $w-> {extraPoints};
    if ( $w->{ini}->{lookupEnabled} && defined $wl) {
       my $i;
-      $canvas-> color( $w->{extraPointColor});
+      $canvas-> color( $w-> {ini}->{Color_ExtraPoints});
       for ( $i = 0; $i < scalar @$wl; $i+=2) {
          my ( $x, $y) = @$wl[ $i, $i+1];
          $canvas-> line( $x * $z - $p, $y * $z - $p, $x * $z + $p, $y * $z + $p);
@@ -874,7 +869,7 @@ sub IV_Paint
       $_ *= $z for @a;
       $canvas-> linePattern( lp::Dash);
       $canvas-> lineWidth( $z) if $z > 1;
-      $canvas-> color( $w->{pointColor});
+      $canvas-> color( $w-> {ini}->{Color_Points});
       $canvas-> line( @a[0..3]);
       $canvas-> line( @a[0,1,4,5]);
    }   
@@ -886,16 +881,23 @@ package Run;
 
 my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
-   ["Clear all ~points"    => sub { 
+   [ EditClearPoints => "Clear all ~points"    => sub { 
       $_[0]-> rpt_clear; 
       $_[0]-> sb_points(); 
       $_[0]-> win_untemp;
       $_[0]-> IV-> repaint; 
    }, ],
-   ["Put/erase point" => 'x' => kb::NoKey => sub {
-       Prima::MsgBox::message( "Not from menu, of course!\nJust press 'x'!",
+   [ EditTogglePoint => "Put/erase point" => sub {
+       Prima::MsgBox::message( "Not from menu, of course!\nJust press it!",
          mb::Ok|mb::Warning);
    }, ],
+   [],
+   [ EditToggleLookup => "Toggle look~up" => sub{
+       my $w = $_[0];
+       $w-> {ini}-> {lookupEnabled} = $w-> {ini}-> {lookupEnabled} ? 0 : 1;
+       $w-> win_untemp;
+       $w-> IV-> repaint if $w-> {file};
+   }],
    [],
 );
 
@@ -904,19 +906,11 @@ my $w = CenWindow-> create(
       ImageAppWindow::winmenu_file(),
       $wedt,
       ImageAppWindow::winmenu_view(),
-      [],["~Help" => [
-         ["~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
-         ["~PLab Apps" => sub { $_[0]-> open_help(); }],
-         ["~Contents" => sub { $_[0]-> open_help("ManCen.html"); }],
+      [],[ "~Help" => [
+         [ HelpAbout    => "~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
+         [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],
+         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("ManCen.html"); }],
       ]],
-   ],
-   accelItems => [
-      [ Space => 0, 0, kb::Space => sub{
-         my $w = $_[0];
-         $w-> {ini}-> {lookupEnabled} = $w-> {ini}-> {lookupEnabled} ? 0 : 1;
-         $w-> win_untemp;
-         $w-> IV-> repaint if $w-> {file};
-      }],
    ],
 );
 

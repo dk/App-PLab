@@ -18,17 +18,12 @@ sub win_inidefaults
    my $w = $_[0];
    return (
       $w-> SUPER::win_inidefaults,
-      FrameColor         => '0xFF00FF',
-      ProcessesColor     => '0x000080',
-      BranchesColor      => '0x00FF00',
-      ActiveProcessColor => '0x80FF80',
-      CellsColor         => '0xFF0000',
       nLines             => 6,
       autoCrispen        => 0,
       autoStretch        => 0,
       StatisticsWindowRect => '120 120 400 250',
-      SpectrumMin        => 40,
-      SpectrumMax        => 90,
+      SpectrumMin        => 0,
+      SpectrumMax        => 50,
       ShowExtras         => 0,
    );
 }
@@ -41,11 +36,6 @@ sub on_create
    $self-> SUPER::on_create;
    $self-> {dataExt}            = 'pls';
    
-   for ( qw(frame processes branches activeProcess cells)) {
-      my $c = $_ . 'Color';
-      $w-> {$c} = eval($w->{ini}-> {ucfirst($c)}); 
-   }
-
    my $tb  = $self-> ToolBar;
 
    my %btn_profile = (
@@ -105,18 +95,6 @@ sub on_create
    $w-> menu-> AutoStretching-> checked( $w-> {ini}-> {autoStretch});
    $w-> reset_mark_state;
 }
-
-sub on_destroy
-{
-   my ($w,$i) = ($_[0],$_[0]->{ini});
-   for ( qw(frame processes branches activeProcess cells)) {
-      my $c = $_ . 'Color';
-      $i-> {ucfirst($c)} = $w-> ini_makecolor($w-> {$c});
-   }
-   $w-> SUPER::on_destroy;
-}
-
-
 
 sub load_info
 {
@@ -521,7 +499,7 @@ sub win_framechanged
    my $tb = $w-> ToolBar;
    my $i = defined $w-> {file};
 
-   $w-> menu-> Stats-> enabled( $i);
+   $w-> menu-> FileStats-> enabled( $i);
    $tb-> MarkCells-> enabled( $i);
    $tb-> MarkProcesses-> enabled( $i);
    $tb-> DrawProcesses-> enabled( $i);
@@ -939,7 +917,7 @@ sub IV_Paint
    $ih *= $z;
    $szy *= $z;
    
-   $canvas-> set( lineWidth => 2, color => $w-> {frameColor});
+   $canvas-> set( lineWidth => 2, color => $w-> {ini}-> {Color_Frame});
    $canvas-> line( $dx, $dy, $iw - $dx, $dy);
    $canvas-> line( $iw - $dx, $dy, $iw - $dx, 0);
    $canvas-> line( $dx, $dy, $dx, $ih);
@@ -951,7 +929,7 @@ sub IV_Paint
       $canvas-> line( $dx, $dy + $szy*$i, $iw - $dx, $dy + $szy*$i);
    }
 
-   $canvas-> color( $w-> {cellsColor});
+   $canvas-> color( $w-> {ini}-> {Color_Cells});
    
    foreach (@{$w-> {cells}}) {
       my ($x, $y) = split;
@@ -967,7 +945,7 @@ sub IV_Paint
    }
    
 
-   $canvas-> color( $w-> {processesColor});
+   $canvas-> color( $w-> {ini}-> {Color_Processes});
    foreach (@{$w-> {processes}})
    {
       my ($x, $y) = split;
@@ -987,10 +965,10 @@ sub IV_Paint
    my ( $i) = 0;
    foreach ( @{ $w->{ branches}}) {
       if ( defined( $w->{ binfo}->{ nearestBranch}) && ( $i == $w->{ binfo}->{ nearestBranch})) {
-         $canvas->color( $w->{ activeProcessColor});
+         $canvas->color( $w->{ini}-> {Color_ActiveProcess});
       }
       else {
-         $canvas->color( $w->{ branchesColor});
+         $canvas->color( $w-> {ini}-> {Color_Branches});
       }
       my ( @br) = map { ( $_->[ 0] * $z, $_->[ 1] * $z)} @$_;
       $canvas->polyline( \@br);
@@ -1001,26 +979,28 @@ sub IV_Paint
 
 # OPT
 
-sub opt_colornames
+sub opt_colors
 {
-   return (
-      'Frame',
-      'Process',
-      'Branches',
-      'Active process',
-      'Cells'
-   );
+   return {
+      'Frame'         => [ cl::LightMagenta, 'Frame'],
+      'Processes'     => [ cl::Blue,       'Process'],
+      'Branches'      => [ cl::LightGreen, 'Branches'],
+      'ActiveProcess' => [ 0x80FF80,       'Active process'],
+      'Cells'         => [ cl::LightRed,   'Cells'],
+   };
 }
 
-sub opt_colormount
+sub opt_keys
 {
-   my $w = $_[0];
-   unless ( $#_) {
-      return $w->{frameColor}, $w->{processesColor}, $w->{branchesColor}, $w-> {activeProcessColor}, $w-> {cellsColor};
-   } else {
-      ($w->{frameColor}, $w->{processesColor}, $w->{branchesColor}, $w-> {activeProcessColor}, $w-> {cellsColor}) = @_[1..5];
-      $w-> IV-> repaint;
-   }
+   return {
+      %{$_[0]-> SUPER::opt_keys()},
+      AutoCrispening => [ kb::Space,           'Automatically crispen the image'],
+      AutoStretching => [ km::Ctrl|kb::Space,  'Automatically stretch the image color spectrum'],
+      FileStats      => [ '@S',                'Invoke statistic data dialog'],
+      HelpAbout      => [ kb::NoKey,           'Standard about box'],
+      HelpPlabApps   => [ kb::NoKey,           'Online PlabApps overview'],
+      HelpContents   => [ kb::NoKey,           'Online PrLenS overview'],
+   },
 }
 
 sub opt_propcreate
@@ -1080,6 +1060,8 @@ sub opt_propcreate
           $canvas-> fillPattern( fp::Solid);
           $canvas-> fill_ellipse( $a, $sz[1] / 2, 6, 6);
           $canvas-> fill_ellipse( 4 + $b, $sz[1] / 2, 6, 6);
+          $canvas-> color( cl::White);
+          $canvas-> text_out( "$a:$b", 1, 1);
        },
        onMouseDown => sub {
           my ( $self, $btn, $mod, $x, $y) = @_;
@@ -1135,6 +1117,10 @@ sub opt_propcreate
        hint => 'Turn on auto-stretching before preview',
        name => 'StretchPreview',
        onClick => sub {
+          unless ( $w-> {ini}->{autoStretch}) {
+             return if Prima::MsgBox::message("Auto stretch feature is not turned on. Turn it on now?", mb::YesNo|mb::Information) != mb::Yes;
+             $w-> stretching_state_changed;
+          }
           $w-> {ini}-> {SpectrumMin} = $slider-> {min};
           $w-> {ini}-> {SpectrumMax} = $slider-> {max};
           $w-> preprocess;
@@ -1157,8 +1143,8 @@ sub opt_proppush
       $ssl-> {$_}  = 255 if $ssl-> {$_} > 255;
    }
    my $pi = $nbpages-> pageIndex;
-   $nbpages-> pageIndex( 3);
-   $nbpages-> StretchPreview-> enabled( defined($w-> {file}) && $w-> {ini}->{autoStretch});
+   $nbpages-> pageIndex( 4);
+   $nbpages-> StretchPreview-> enabled( defined($w-> {file})); 
    $nbpages-> pageIndex( $pi);
 }
 
@@ -1198,15 +1184,15 @@ package Run;
 
 my $wfil = ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -1, 0,
-   [ '-Stats'  => "~Statistics"   => 'Alt+S' => '@S' => q(show_stats)],
+   [ '-FileStats'  => "~Statistics"   => q(show_stats)],
    [],
    
 );
 
 my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
-   [ AutoCrispening => "~Auto crispening" => "SpaceBar" => kb::Space => q(crispen_state_changed) ],
-   [ AutoStretching => "Auto stretching"  => "C-Space" => km::Ctrl|kb::Space => q(stretching_state_changed) ],
+   [ AutoCrispening => "~Auto crispening" => q(crispen_state_changed) ],
+   [ AutoStretching => "Auto stretching"  => q(stretching_state_changed) ],
    [],
 );
 
@@ -1215,6 +1201,11 @@ my $w = LenWindow-> create(
       $wfil,
       $wedt,
       ImageAppWindow::winmenu_view(),
+      [],["~Help" => [
+         [ HelpAbout =>  "~About" => sub {Prima::MsgBox::message("PLab application series, Process Lengths, version 2.00", mb::OK|mb::Information)}],
+         [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],
+         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("PrLens.html"); }],
+      ]],
    ],
 );
 $w-> IV-> delegations(['Paint', 'MouseClick']);

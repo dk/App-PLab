@@ -9,7 +9,7 @@ use Cwd qw(abs_path);
 
 use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
               IniFile Sliders Utils Notebooks ComboBox Buttons Label
-              ColorDialog Contrib::ButtonGlyphs);
+              ColorDialog Contrib::ButtonGlyphs KeySelector);
 use PLab;
 use PLab::Prima::ImageAppGlyphs;
 no Prima::StartupWindow;
@@ -278,17 +278,29 @@ sub on_create
    my $w = $_[0];
    my $uname = lc(Prima::Utils::username() || '');
    $uname .= '.' if $uname;
+   my @iniDefaults = $w-> win_inidefaults();
+   my $keys   = $w-> opt_keys;
+   my $colors = $w-> opt_colors;
+   push ( @iniDefaults, 
+      map { 
+         ( "Key_$_", $keys->{$_}->[0]) 
+      } keys %$keys);
+   push( @iniDefaults, 
+      map { 
+         ( "Color_$_", $w-> ini_makecolor( $colors->{$_}->[0]))
+      } keys %$colors);
    $w->{iniFile} = Prima::IniFile-> create(
       file => "Prima.ini",
       default => [
-         $uname.$::application->name => [
-            $w-> win_inidefaults(),
-         ],
+         $uname.$::application->name => \@iniDefaults,
       ]
    );
    my $i;
    $w-> {uname} = $uname;
    $i = $w-> {ini} = $w-> {iniFile}-> section( $uname.$::application->name);
+   $w-> {keyMappings} = { map { $_ => Prima::AbstractMenu-> translate_shortcut( eval($i-> {$_})); } 
+       grep { m/^Key_/  } keys %$i };
+   $i->{"Color_$_"} = eval( $i->{"Color_$_"}) for keys %$colors;
    my @rc = split ' ', $i->{WindowRect};
    my @ac = $::application-> rect;
    $ac[3] -= $::application-> get_system_value( sv::YMenu) * 3 + $::application-> get_system_value( sv::YTitleBar);
@@ -310,6 +322,7 @@ sub on_create
       items    => [['' => '']],
    );
    $::application-> showHint( $w-> {ini}-> {showHint});
+   $w-> winmenu_updatemappings;
 }
 
 sub on_destroy
@@ -320,6 +333,10 @@ sub on_destroy
    my @rc = $w-> rect;
    $i->{WindowRect} = "@rc";
    $i->{SerType}    = ( $w->{cypherMask} == 2) ? 'Short' : 'Long';
+   $i-> {$_} = Prima::KeySelector::shortcut( $w-> {keyMappings}->{$_})
+      for keys %{$w->{keyMappings}};
+   my $optColors = $w-> opt_colors;   
+   $i-> {"Color_$_"} = $w-> ini_makecolor( $i-> {"Color_$_"}) for keys %$optColors;
    $::application-> close;
 }
 
@@ -395,7 +412,7 @@ sub win_closeframe
 sub win_framechanged
 {
    my $w = $_[0];
-   $w-> menu-> CloseImage-> enabled( defined $w-> {file});
+   $w-> menu-> FileCloseImage-> enabled( defined $w-> {file});
 }
 
 sub win_newextras
@@ -427,14 +444,14 @@ sub win_extraschanged
 {
    my $w = $_[0];
    my $tb = $w-> ToolBar;
-   $w-> menu-> NextImage-> enabled( defined $w-> {nextFile});
+   $w-> menu-> FileNextImage-> enabled( defined $w-> {nextFile});
    $tb-> NextImage-> enabled( defined $w-> {nextFile});
-   $w-> menu-> PrevImage-> enabled( defined $w-> {prevFile});
+   $w-> menu-> FilePrevImage-> enabled( defined $w-> {prevFile});
    $tb-> PrevImage-> enabled( defined $w-> {prevFile});
-   $w-> menu-> Next5Image-> enabled( defined $w-> {nextFile});
-   $w-> menu-> Prev5Image-> enabled( defined $w-> {prevFile});
-   $w-> menu-> LastImage -> enabled( defined $w-> {nextFile});
-   $w-> menu-> FirstImage-> enabled( defined $w-> {prevFile});
+   $w-> menu-> FileNext5Image-> enabled( defined $w-> {nextFile});
+   $w-> menu-> FilePrev5Image-> enabled( defined $w-> {prevFile});
+   $w-> menu-> FileLastImage -> enabled( defined $w-> {nextFile});
+   $w-> menu-> FileFirstImage-> enabled( defined $w-> {prevFile});
 }
 
 sub win_openfile
@@ -652,17 +669,17 @@ sub winmenu_file
 {
    return
    ["~File" => [
-      [ FileOpen         => "~Open"        => "F3"      => 'F3'               => q(win_openfile)],
-      [ FileSerOpen      => "Open ~series..." => "Ctrl+F3" => '^F3'          => q(win_openserfile)],
-      [ '-NextImage'     => "~Next File"   => "Right"   => kb::Right          => q(win_nextfile)],
-      [ '-PrevImage'     => "~Prev File"   => "Left"    => kb::Left           => q(win_prevfile)],
-      [ '-FirstImage'    => "~First File"  => "Home"    => kb::Home           => q(win_firstfile)],
-      [ '-LastImage'     => "~Last File"   => "End"     => kb::End            => q(win_lastfile)],
-      [ '-Next5Image'    => "Next 5 files" => "C-Right" => km::Ctrl|kb::Right => q(win_next5file)],
-      [ '-Prev5Image'    => "Prev 5 files" => "C-Left"  => km::Ctrl|kb::Left  => q(win_prev5file)],
-      [ '-CloseImage'    => "~Close"       => q(win_closefile)],
+      [ FileOpen             => "~Open"        =>  q(win_openfile)],
+      [ FileSerOpen          => "Open ~series..."  => q(win_openserfile)],
+      [ '-FileNextImage'     => "~Next File"   => q(win_nextfile)],
+      [ '-FilePrevImage'     => "~Prev File"   => q(win_prevfile)],
+      [ '-FileFirstImage'    => "~First File"  => q(win_firstfile)],
+      [ '-FileLastImage'     => "~Last File"   => q(win_lastfile)],
+      [ '-FileNext5Image'    => "Next 5 files" => q(win_next5file)],
+      [ '-FilePrev5Image'    => "Prev 5 files" => q(win_prev5file)],
+      [ '-FileCloseImage'    => "~Close"       => q(win_closefile)],
       [],
-      ["E~xit" => "Alt+X"  => '@X'  => sub{ $::application-> close }],
+      [ FileExit          =>  "E~xit" => sub{ $::application-> close }],
    ]];
 }
 
@@ -670,25 +687,25 @@ sub winmenu_view
 {
    return
    ['~View' => [
-      ['~Normal ( 100%)' => 'Ctrl+1' => '^1' => sub{$_[0]->IV->zoom(1.0)}],
-      ['~Best fit' => 'Ctrl+Z' => '^Z' => sub { $_[0]-> iv_zbestfit($_[0]-> IV);} ],
+      [ ViewNormal => '~Normal ( 100%)' =>  sub{$_[0]->IV->zoom(1.0)}],
+      [ ViewBestFit => '~Best fit'       =>  sub { $_[0]-> iv_zbestfit($_[0]-> IV);} ],
       [],
-      ['abfit' => '~Auto best fit' => sub{
-         $_[0]-> iv_zbestfit($_[0]->IV) if $_[0]->IV->{autoBestFit} = $_[0]->menu->abfit-> toggle;
+      [ ViewAutoBestFit => '~Auto best fit' => sub{
+         $_[0]-> iv_zbestfit($_[0]->IV) if $_[0]->IV->{autoBestFit} = $_[0]->menu->ViewAutoBestFit-> toggle;
       }],
       [],
-      ['25%'   => sub{$_[0]->IV->zoom(0.25)}],
-      ['50%'   => 'Ctrl+5' => '^5' => sub{$_[0]->IV->zoom(0.5)}],
-      ['75%'   => sub{$_[0]->IV->zoom(0.75)}],
-      ['150%'  => sub{$_[0]->IV->zoom(1.5)}],
-      ['200%'  => 'Ctrl+2' => '^2' => sub{$_[0]->IV->zoom(2)}],
-      ['300%'  => 'Ctrl+3' => '^3' => sub{$_[0]->IV->zoom(3)}],
-      ['400%'  => 'Ctrl+4' => '^4' => sub{$_[0]->IV->zoom(4)}],
-      ['600%'  => 'Ctrl+6' => '^6' => sub{$_[0]->IV->zoom(6)}],
-      ['1600%' => sub{$_[0]->IV->zoom(16)}],
+      [ View25  => '25%'   => sub{$_[0]->IV->zoom(0.25)}],
+      [ View50  => '50%'   => sub{$_[0]->IV->zoom(0.5)}],
+      [ View75  => '75%'   => sub{$_[0]->IV->zoom(0.75)}],
+      [ View150 => '150%'  => sub{$_[0]->IV->zoom(1.5)}],
+      [ View200 => '200%'  => sub{$_[0]->IV->zoom(2)}],
+      [ View300 => '300%'  => sub{$_[0]->IV->zoom(3)}],
+      [ View400 => '400%'  => sub{$_[0]->IV->zoom(4)}],
+      [ View600 => '600%'  => sub{$_[0]->IV->zoom(6)}],
+      [ View1600 => '1600%' => sub{$_[0]->IV->zoom(16)}],
       [],
-      ['~Increase' => '+' => '+' => sub{$_[0]->IV->zoom( $_[0]->IV->zoom * 1.1); $_[0]-> sb_text("Zoom: ".$_[0]->IV->zoom);}],
-      ['~Decrease' => '-' => '-' => sub{$_[0]->IV->zoom( $_[0]->IV->zoom / 1.1); $_[0]-> sb_text("Zoom: ".$_[0]->IV->zoom);}],
+      [ ViewIncrease => '~Increase' => sub{$_[0]->IV->zoom( $_[0]->IV->zoom * 1.1); $_[0]-> sb_text("Zoom: ".$_[0]->IV->zoom);}],
+      [ ViewDecrease => '~Decrease' => sub{$_[0]->IV->zoom( $_[0]->IV->zoom / 1.1); $_[0]-> sb_text("Zoom: ".$_[0]->IV->zoom);}],
    ]];
 }
 
@@ -696,7 +713,7 @@ sub winmenu_edit
 {
    return
    [ edit => '~Edit' => [
-      [ "~Properties..." => q(opt_properties),],
+      [ EditProperties => "~Properties..." => q(opt_properties),],
    ]];
 }
 
@@ -705,6 +722,18 @@ sub winmenu_options
    return
    ['~Options' => [
    ]];
+}
+
+sub winmenu_updatemappings
+{
+   my $w = $_[0];
+   my $menu = $w-> menu;
+   for ( keys %{$w-> {keyMappings}}) {
+      next unless m/^Key_(.*)$/;
+      my ( $item, $value) = ( $1, $w-> {keyMappings}->{$_});
+      $menu-> key( $item, $value);
+      $menu-> accel( $item, ($value == kb::NoKey) ? '' : Prima::KeySelector::describe( $value));
+   }
 }
 
 sub ini_makecolor
@@ -716,11 +745,42 @@ sub ini_makecolor
 # OPT
 sub opt_colormount
 {
-   return ();
 }
 
-sub opt_colornames
+sub opt_colors
 {
+   return {};
+}
+
+sub opt_keys
+{
+   return {
+      'FileOpen'        => [ kb::F3,             "Open an image file"],
+      'FileSerOpen'     => [ kb::NoKey,          "Open series of files"],
+      'FileNextImage'   => [ kb::Right,          "Load next file in series"],
+      'FilePrevImage'   => [ kb::Left,           "Load previous file in series"],
+      'FileFirstImage'  => [ kb::Home,           "Load first in series"],
+      'FileLastImage'   => [ kb::End,            "Load last file in series"],
+      'FileNext5Image'  => [ km::Ctrl|kb::Right, "Skip five files forward"],
+      'FilePrev5Image'  => [ km::Ctrl|kb::Left,  "Skip five files backward"],
+      'FileCloseImage'  => [ kb::NoKey,          "Close the opened file"],
+      'FileExit'        => [ '@X',               "Exit the program"],
+      'EditProperties'  => [ kb::NoKey        ,  "Edit program properties"],
+      'ViewNormal'      => [ '^1'             ,  "Set image zoom factor to 1:1"],
+      'ViewBestFit'     => [ '^Z'             ,  "View image so it fits best to the window"],
+      'ViewAutoBestFit' => [ kb::NoKey        ,  "Toggle automatic 'best fitting' options"],
+      'View50'          => [ '^5'             ,  "Set image zoom factor to 1:2"],
+      'View200'         => [ '^2',               "Set image zoom factor to 2:1"],
+      'View300'         => [ '^3',               "Set image zoom factor to 3:1"],
+      'View400'         => [ '^4',               "Set image zoom factor to 4:1"],
+      'View600'         => [ '^6',               "Set image zoom factor to 6:1"],
+      'View25'          => [ kb::NoKey        ,  "Set image zoom factor to 1:4"],
+      'View75'          => [ kb::NoKey        ,  "Set image zoom factor to 3:4"],
+      'View150'         => [ kb::NoKey        ,  "Set image zoom factor to 3:2"],
+      'View1600'        => [ kb::NoKey        ,  "Set image zoom factor to 16:1"],
+      'ViewIncrease'    => [ '+'              ,  "Increase image zoom factor by 10%"],
+      'ViewDecrease'    => [ '-'              ,  "Decrease image zoom factor by 10%"],
+   }   
 }
 
 
@@ -796,9 +856,10 @@ sub opt_propcreate
       hint   => 'Enables these little pop-ups like the one you are looking at right now',
    );
 
-   my @colorNames = $w-> opt_colornames;
-   my @colors = $w-> opt_colormount;
-   if ( scalar @colors) {
+   my $optColors  = $w-> opt_colors;
+   my @colorNames = map { $optColors->{$_}->[1] } keys %$optColors;
+   my @colorKeys  = map { "Color_$_" } keys %$optColors; 
+   if ( scalar keys %$optColors) {
       my $x1 = $nb-> insert_to_page( 1, ComboBox =>
          origin => [ 10, 10],
          size   => [ 170, $nb-> font-> height + 2],
@@ -825,11 +886,94 @@ sub opt_propcreate
             unless ( $nbpages-> {deprecate}) {
                my $colors = $dlg-> {page2}-> {colors};
                $$colors[ $nbpages-> NameSel-> focusedItem] = $_[0]-> value;
-               $w-> opt_colormount( @$colors);
+               my $i;
+               for ( $i = 0; $i < scalar @colorKeys; $i++) {
+                  $w->{ini}->{$colorKeys[$i]} = $colors->[$i];
+               }
+               $w-> opt_colormount;
+               $w-> IV-> repaint;
             }
          },
       );
    }
+
+# Keys
+   my $optKeys = $w-> opt_keys;
+   $nb-> insert_to_page( 2, [ ListBox =>  
+      origin => [ 10, 58],
+      size   => [ 200, 222],
+      name   => 'KeyList',
+      items  => [ sort keys %$optKeys, ],
+      onSelectItem => sub {
+         my ( $me, $signs, $state) = @_;
+         return unless $state;
+         my $key = $_[0]-> get_item_text( $_[0]-> focusedItem);
+         my $x = $w-> {keyMappings}-> {"Key_$key"};
+         $w-> {keyMappings_change} = 1;
+         $nbpages-> KeySelector-> key( $w-> {keyMappings}-> {"Key_$key"} );
+         delete $w-> {keyMappings_change};
+         $nbpages-> KeyDescription-> text( $optKeys-> {$key}-> [1] );
+      },
+  ], [ KeySelector =>  
+      origin => [ 220, 110],
+      size   => [ 150, 170],
+      name   => 'KeySelector',
+      onChange => sub {
+         return if $w-> {keyMappings_change};
+         my $okey = $nbpages-> KeyList-> get_item_text( $nbpages-> KeyList-> focusedItem); 
+         my $key = "Key_$okey";
+         my $value = $_[0]-> key; 
+         if ( $value != kb::NoKey) {
+            for ( keys %{$w-> {keyMappings}}) {
+               next if $_ eq $key;
+               next unless $value == $w-> {keyMappings}->{$_};
+               s/^Key_//;
+               $w-> {keyMappings_change} = 1;
+               $_[0]-> key( $w-> {keyMappings}->{$key}); 
+               delete $w-> {keyMappings_change};
+               my $l = $nbpages-> KeyDescription;
+               $l-> backColor( cl::LightRed);
+               $l-> color( cl::Yellow);
+               $l-> text( "This key combination is already occupied by $_ and cannot be used");
+               $l-> insert( Timer => timeout => 100 => onTick => sub {
+                  $l-> backColor( cl::Back);
+                  $l-> color( cl::Fore);
+                  $_[0]-> destroy;
+               })-> start;
+               return;
+            }
+         }
+         $w-> {keyMappings}->{$key} = $value;
+         $nbpages-> KeyDescription-> text( $optKeys-> {$okey}-> [1] );
+      },
+   ], [ Label => 
+      origin => [ 220, 10],
+      size   => [ 150, 100],
+      autoWidth  => 0,
+      autoHeight => 0,
+      text       => '',
+      name       => 'KeyDescription',
+      wordWrap   => 1,
+   ], [ Button => 
+      origin  => [ 10, 10],
+      size    => [96, 36],
+      text    => '~Clear',
+      hint    => 'Clears the key',
+      onClick => sub {
+         $nbpages-> KeySelector-> key( kb::NoKey);
+      },
+   ] , [ Button => 
+      origin  => [ 114, 10],
+      size    => [96, 36],
+      text    => '~Default',
+      hint    => 'Set default value for a key',
+      onClick => sub {
+         $nbpages-> KeySelector-> key( Prima::AbstractMenu-> translate_shortcut(
+            $w-> opt_keys()-> {$nbpages-> KeyList-> get_item_text( 
+               $nbpages-> KeyList-> focusedItem)}-> [0])); 
+      },
+   ] );
+   $nbpages-> KeyList-> focusedItem(0);
 }
 
 sub opt_proppush
@@ -844,13 +988,16 @@ sub opt_proppush
    $nbpages-> Path-> text( length($w->{ini}->{extSaveDir}) ? $w->{ini}->{extSaveDir} : '.');
 # Colors
    $nbpages-> ShowHint-> checked( $w-> {ini}-> {showHint});
-   my @colors = $w-> opt_colormount;
-   $dlg-> {page2}-> {csave} =  [ @colors ];
+   my $optColors = $w-> opt_colors;
+   my @colors    = map { $w-> {ini}->{"Color_$_"}} keys %$optColors;  
+   $dlg-> {page2}-> {csave} =  { map { ( "Color_$_", $w-> {ini}->{"Color_$_"}) } keys %$optColors};
    $dlg-> {page2}-> {colors} = [ @colors ];
    if ( scalar @colors) {
       $nbpages-> NameSel-> focusedItem( defined $w->{nameSelFoc} ? $w->{nameSelFoc} : 0);
       $nbpages-> ColorSel-> value( $colors[ $nbpages-> NameSel-> focusedItem]);
    }
+# Keys
+   $w-> {keyMappings_save} = { %{ $w-> {keyMappings}} }; 
 }
 
 sub opt_propvalid
@@ -895,10 +1042,20 @@ sub opt_proppop
       }
 # Hints
       $::application-> showHint( $w-> {ini}-> {showHint} = $nbpages-> ShowHint-> checked);
+# Keys 
+      $w-> winmenu_updatemappings;
    } else {
 # Colors
-      $w-> opt_colormount( @{$dlg->{page2}->{csave}}) if $dlg-> {page2}-> {csave};
+      if ( $dlg-> {page2}-> {csave}) {
+         $w-> {ini}-> {$_} = $dlg->{page2}->{csave}-> {$_} for keys %{$dlg->{page2}->{csave}};
+         $w-> opt_colormount;
+         $w-> IV-> repaint;
+      }
+# Keys      
+      $w-> {keyMappings} = $w-> {keyMappings_save};
+      $nbpages-> KeyList-> notify(q(SelectItem), [$nbpages-> KeyList-> focusedItem], 1);
    }
+   delete $w-> {keyMappings_save};
 }
 
 sub opt_properties
@@ -927,7 +1084,7 @@ sub opt_properties
          size      => [ 410, 392],
          growMode  => gm::Client,
          pageCount => 2,
-         tabs      => ['General', 'Appearance',],
+         tabs      => ['General', 'Appearance', 'Keys'],
          name      => 'Notebook',
       );
       $w-> opt_propcreate( $dlg, $nb, $nb-> Notebook);
@@ -1199,6 +1356,3 @@ sub init
 }
 
 1;
-
-
-

@@ -23,6 +23,7 @@ sub opt_propcreate
       tabs      => [ @nbpages, 'Calibrations'],
       pageCount => scalar(@nbpages) + 1,
    );
+   my $pg = $nb-> pageCount;
 
    $w-> SUPER::opt_propcreate( $dlg, $nb, $nbpages);
 # Calibrations
@@ -32,7 +33,7 @@ sub opt_propcreate
       max      => 10,
       step     => 0.01,
    );
-   $nb-> insert_to_page( 2, [
+   $nb-> insert_to_page( $pg, [
       SpinEdit =>
       origin   => [ 5, 65],
       name     => 'XC',
@@ -43,7 +44,7 @@ sub opt_propcreate
       name => 'YC',
       %spinPrf,
    ]);
-   $nb-> insert_to_page( 2, [
+   $nb-> insert_to_page( $pg, [
       Label     =>
       origin    => [ 5, 90],
       size      => [ 265, 20],

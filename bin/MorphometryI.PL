@@ -1,3 +1,4 @@
+use strict;
 use Prima;
 use Prima::Application name => "Morphometry I";
 use PLab::Prima::ImageApp;
@@ -14,10 +15,10 @@ $::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
 
 package ocq;
 
-use constant Files      => 0;
-use constant Basics     => 1;
-use constant Histogram  => 2;
-use constant Equalize   => 3;
+use constant Files      => 1;
+use constant Basics     => 2;
+use constant Histogram  => 4;
+use constant Equalize   => 8;
 
 package MorphoWindow;
 use vars qw(@ISA);
@@ -298,7 +299,7 @@ sub win_objectsetsmenuaction
    $self-> iv_cancelmode( $iv);
    $self-> {currentSet} = $id;
    $self-> pt_newset();
-   $iv-> {bone}-> backColor( $self-> {setColors}->[ $self-> {currentSet}]);
+   $iv-> {bone}-> backColor( $self-> {ini}-> {$self-> {setColors}->[ $self-> {currentSet}]});
    my $c = $menu-> text( $id);
    $c =~ s/\~//;
    $self-> sb_text("Object set:$c");
@@ -323,10 +324,6 @@ sub win_inidefaults
    vec( $calcopt, 0, 32) = ocq::Files | ocq::Basics;
    return (
       $w-> SUPER::win_inidefaults,
-      FeaturesColor    => '0x00FF00',
-      BackgroundColor  => '0xFFFF00',
-      RemoveColor      => '0xFFFFFF',
-      PointColor       => '0xFF0000',
       RecWindowPos     => '100 100',
       RecWindowVisible => 0,
       UFThreshold      => 40,
@@ -362,15 +359,21 @@ sub on_create
       ['*0' => "~Features"   => \&win_objectsetsmenuaction],
       ['1'  => "~Background" => \&win_objectsetsmenuaction],
       ['2'  => "~Remove"     => \&win_objectsetsmenuaction],
+      [],
+      [ LineWidthIncrement =>  '~Increase line width' => sub {
+         $_[0]-> win_objectlwmenuaction( 'lw'.($_[0]-> {ini}-> {'LW'.$_[0]-> {currentSet}} + 1));
+      }],
+      [ LineWidthDecrement => '~Decrease line width' => sub {
+         $_[0]-> win_objectlwmenuaction( 'lw'.($_[0]-> {ini}-> {'LW'.$_[0]-> {currentSet}} - 1));
+      }],
    ];
-   $w-> {setColors}      = [ eval($i-> {FeaturesColor}), eval($i->{BackgroundColor}), eval($i->{RemoveColor})];
-   $w-> {pointColor}     = eval($i->{PointColor});
+   $w-> {setColors}      = [ qw( Color_Features Color_Background Color_Remove)];
    $w-> menu-> insert( [[ "~Object sets" => $xref]], 'edit' , 6);
    $w-> {currentSet} = 0;
    $w-> pt_init();
    my $iv = $w-> IV;
    my $bone = $iv-> {bone};
-   $bone-> backColor( $w-> {setColors}->[$w-> {currentSet}]);
+   $bone-> backColor( $w-> {ini}-> {$w-> {setColors}->[$w-> {currentSet}]});
    $bone-> set( onMouseClick => sub {
       my ( $cs, $mx) = ( $w-> {currentSet} + 1, scalar @{$w-> {setColors}});
       $cs = 0 if $cs >= $mx;
@@ -420,12 +423,7 @@ sub on_create
 sub on_destroy
 {
    my ($w,$i) = ($_[0],$_[0]->{ini});
-   $i-> {FeaturesColor}    = $w-> ini_makecolor( $w-> {setColors}->[0]);
-   $i-> {BackgroundColor}  = $w-> ini_makecolor( $w-> {setColors}->[1]);
-   $i-> {RemoveColor}      = $w-> ini_makecolor( $w-> {setColors}->[2]);
-   $i-> {PointColor}       = $w-> ini_makecolor( $w-> {pointColor});
    $i-> {RecWindowVisible} = defined $w-> {recWindow} ? 1 : 0;
-
    $w-> SUPER::on_destroy;
 }
 
@@ -444,10 +442,10 @@ sub win_framechanged
    $w-> {mirrorImage} = undef;
    my $i = $w-> IV-> image;
    my $canApply = defined $i && $i-> type == im::Byte;
-   $w-> menu-> Contours-> enabled( defined $i);
-   $w-> menu-> Apply-> enabled( $canApply);
-   $w-> menu-> Validate-> enabled( defined $i);
-   $w-> menu-> Import-> enabled( defined $i);
+   $w-> menu-> EditToggleMode-> enabled( defined $i);
+   $w-> menu-> EditApplyContours-> enabled( $canApply);
+   $w-> menu-> EditValidate-> enabled( defined $i);
+   $w-> menu-> EditImport-> enabled( defined $i);
    $w-> ToolBar-> Contours-> enabled( defined $i);
    if ( $w-> {recWindow}) {
       my $r = $w-> {recWindow};
@@ -1180,38 +1178,53 @@ sub win_extraschanged
 {
    my $w = $_[0];
    $w-> SUPER::win_extraschanged;
-   $w-> menu-> optcalib-> enabled( defined $w-> {nextFile} || defined $w-> {prevFile});
+   $w-> menu-> EditOptCalib-> enabled( defined $w-> {nextFile} || defined $w-> {prevFile});
 }
 
 
 # WIN_END
 # OPT
 
-sub opt_colornames
+sub opt_colors
 {
-   return qw(
-       Features
-       Background
-       Remove
-       Points
-   );
+   return {
+       Features    => [ cl::LightGreen,    'Features'],
+       Background  => [ cl::Yellow,        'Background'], 
+       Remove      => [ cl::White,         'Remove'], 
+       Points      => [ cl::LightRed,      'Points'],  
+   },
 }
 
 sub opt_colormount
 {
    my $w = $_[0];
-   unless ( $#_) {
-      my @cs = @{$w->{setColors}};
-      push ( @cs, $w->{pointColor});
-      return @cs;
-   } else {
-      my $m = scalar @_;
-      $w->{pointColor} = $_[$m-1];
-      $w->{setColors}  = [@_[1..$m-2]];
-      $w-> IV-> repaint;
-      $w-> IV-> {bone}-> backColor( $w-> {setColors}->[$w-> {currentSet}]);
-   }
+   $w-> IV-> {bone}-> backColor( $w-> {ini}-> {$w-> {setColors}->[$w-> {currentSet}]});
 }
+
+sub opt_keys
+{
+   return {
+      %{$_[0]-> SUPER::opt_keys()},
+      EditImport    => [ kb::NoKey => "Import another contours into document"],
+      EditOptCalib  => [ kb::NoKey => "Recalculate series"],
+      EditCalcStats => [ '@C'      => "Calculate and display statistics"],
+      Undo1         => [ kb::Backspace => "Undo drawing"],
+      Undo2         => [ km::Alt|kb::Backspace => "Undo group of lines"],
+      Undo3         => [ '@U'          => "Show undo dialog"],
+      EditClearAll  => [ kb::NoKey     => "Clear all drawings"],
+      EditRemovePoints   => [ kb::NoKey     => "Remove all points"],
+      EditToggleMode     => [ 'F11'     => "Toggle drawings/points mode"],
+      EditValidate       => [ km::Ctrl|kb::Enter => "Validate contours"], 
+      EditRecSetup       => [ kb::NoKey  => "Display recognition setup dialog"],
+      EditApplyContours  => [ km::Alt|kb::Enter => "Apply contours to document"],
+      EditHack           => [ kb::NoKey         => "Hack of the day"],
+      HelpAbout        => [ kb::NoKey,      'Standard about box'],
+      HelpPlabApps     => [ kb::NoKey,      'Online PlabApps overview'],
+      HelpContents     => [ kb::NoKey,      'Online Morphometry I overview'],
+      LineWidthIncrement => [ '@+',   'Increment line width for current object'],
+      LineWidthDecrement => [ '@-',   'Decrement line width for current object'],
+   };
+};
 
 sub opt_changecalib
 {
@@ -1783,6 +1796,8 @@ sub opt_propcreate
    });
 }
 
+my %widcolors = ( Features => 1, Background => 1, Remove => 1);
+
 sub opt_proppush
 {
    my ( $w, $dlg, $nb, $nbpages) = @_;
@@ -1800,13 +1815,12 @@ sub opt_proppush
    $nbpages-> pageIndex( $nbc);
    $dlg->{page3}->{NumberOfRotations} = $w->{ini}->{NumberOfRotations};
    my $i = 0;
-   my @widths = $w-> opt_colormount; # same numbers as colors
-   for ( @widths) {
-      $_ = defined $w->{ini}->{"LW$i"} ?
-         $w->{ini}->{"LW$i"} :
-         0;
-      $i++;
-   }
+   my %colors = %{$w-> opt_colors};
+   my %ids    = map { ( $_ , $i++ ) } keys %colors;
+   my @widths = (1) x scalar keys %colors;
+   $widths[$ids{Features}]   = $w-> {ini}-> {LW0};
+   $widths[$ids{Background}] = $w-> {ini}-> {LW1};
+   $widths[$ids{Remove}]     = $w-> {ini}-> {LW2};
    $dlg-> {page2}-> {widths} = \@widths;
    $nbpages-> LineWidth-> value( $widths[ $nbpages-> NameSel-> focusedItem]);
 }
@@ -1822,10 +1836,12 @@ sub opt_proppop
       for ( qw( HolesPercent NumberOfRotations)) {
          $w->{ini}->{$_} = $nbpages-> bring($_)-> value;
       }   
-      my $i;
-      for ( $i = 0; $i < scalar @{$w-> {setColors}}; $i++) {
-         $w->{ini}->{"LW$i"}  = $dlg-> {page2}-> {widths}->[$i];
-      }
+      my $i = 0;
+      my %colors = %{$w-> opt_colors}; 
+      my %ids    = map { ( $_ , $i++ ) } keys %colors;
+      $w-> {ini}-> {LW0} = $dlg-> {page2}-> {widths}-> [$ids{Features}];
+      $w-> {ini}-> {LW1} = $dlg-> {page2}-> {widths}-> [$ids{Background}];
+      $w-> {ini}-> {LW2} = $dlg-> {page2}-> {widths}-> [$ids{Remove}];
       init_convex( $w->{ini}->{NumberOfRotations}) if
          $w->{ini}->{NumberOfRotations} != $dlg->{page3}->{NumberOfRotations};
    }
@@ -1974,12 +1990,12 @@ sub pt_start
 sub pt_updatemenu
 {
    my $w  = $_[0];
-   $w-> menu-> undo1-> action( \&pt_undo1);
-   $w-> menu-> undo1-> enable;
-   $w-> menu-> undo2-> action( \&pt_undo2);
-   $w-> menu-> undo2-> enable;
-   $w-> menu-> undo3-> action( \&pt_undo3);
-   $w-> menu-> undo3-> enable;
+   $w-> menu-> Undo1-> action( \&pt_undo1);
+   $w-> menu-> Undo1-> enable;
+   $w-> menu-> Undo2-> action( \&pt_undo2);
+   $w-> menu-> Undo2-> enable;
+   $w-> menu-> Undo3-> action( \&pt_undo3);
+   $w-> menu-> Undo3-> enable;
 }
 
 sub pt_add
@@ -2008,7 +2024,7 @@ sub pt_clear
    my $w = $_[0];
    ${$w-> pt_lines_ptr()} = undef;
    ${$w-> pt_lw_ptr()} = undef;
-   for ( qw( undo1 undo2 undo3)) {
+   for ( qw( Undo1 Undo2 Undo3)) {
       $w-> menu-> action( $_, sub{});
       $w-> menu-> disable( $_);
    }
@@ -2158,7 +2174,7 @@ sub IV_MouseMove
       my ( $x1, $y1) = $self-> point2screen( @{$w-> pt_lines->[-1]}[-2,-1]);
       $w-> pt_add( $self-> screen2point( $x, $y));
       $self-> begin_paint;
-      $self-> color( $w->{setColors}->[$w->{currentSet}]);
+      $self-> color( $w-> {ini}-> {$w->{setColors}->[$w->{currentSet}]});
       $self-> lineWidth( $self-> zoom * $w-> {ini}-> {'LW'.$w->{currentSet}});
       $self-> line( $x, $y, $x1, $y1);
       $self-> end_paint;
@@ -2192,7 +2208,7 @@ sub IV_Paint
          my $wwl  = $w->{lineStorage}->[$i];
          my $wwlw = $w->{lwStorage}->[$i];
          next unless defined $wwl;
-         $canvas-> color( $w->{setColors}->[$i]);
+         $canvas-> color( $w-> {ini}-> {$w->{setColors}->[$i]});
          my $j;
          my $lastLW = 0;
          for ( $j = 0; $j < @$wwl; $j++) {
@@ -2457,36 +2473,36 @@ package Run;
 my $wfil = ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -2, 0,
    [],
-   ['-Import' => "~Import contours" => q(win_importextras)],
-   [ '-optcalib' => "~Recalculate series"  => q(opt_changecalib)],
-   [ "~Calculate statistics"  => "Alt+C" => '@C' => q(opt_statistics)],
+   [ EditImport      => "~Import contours" => q(win_importextras)],
+   [ '-EditOptCalib' => "~Recalculate series"  => q(opt_changecalib)],
+   [ EditCalcStats   => "~Calculate statistics"  => q(opt_statistics)],
 );
 
 my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
-   [ '-undo1' => "~Undo drawing" => "BkSp" => kb::Backspace => sub {},],
-   [ '-undo2' => "~Group undo" => "Alt+BkSp" => km::Alt|kb::Backspace => sub {},],
-   [ '-undo3' => "Undo ~dialog" => "Alt+U" => '@U' => sub {},],
-   ["Clear all ~drawings"  => sub {
+   [ '-Undo1' => "~Undo drawing" => "BkSp" => kb::Backspace => sub {},],
+   [ '-Undo2' => "~Group undo" => "Alt+BkSp" => km::Alt|kb::Backspace => sub {},],
+   [ '-Undo3' => "Undo ~dialog" => "Alt+U" => '@U' => sub {},],
+   [ EditClearAll => "Clear all ~drawings"  => sub {
       $_[0]-> iv_cancelmode( $_[0]-> IV);
       $_[0]-> pt_clear;
       $_[0]-> IV-> repaint;
       $_[0]-> modified( 1);
    }, ],
-   ["Clear all ~points"    => sub {
+   [ EditRemovePoints => "Clear all ~points"    => sub {
       $_[0]-> rpt_clear;
       $_[0]-> IV-> repaint;
       $_[0]-> modified( 1);
    }, ],
    [],
-   [ '-Contours' => "~Toggle points <-> drawings" => 'F11'=>'F11' => sub { $_[0]-> iv_cancelmode( $_[0]-> IV); $_[0]-> iv_togglemode( $_[0]-> IV)}],
+   [ '-EditToggleMode' => "~Toggle points <-> drawings" => 'F11'=>'F11' => sub { $_[0]-> iv_cancelmode( $_[0]-> IV); $_[0]-> iv_togglemode( $_[0]-> IV)}],
    [],
-   [ '-Validate' => "~Validate contours" => 'Ctrl+Enter'=> km::Ctrl|kb::Enter =>
+   [ '-EditValidate' => "~Validate contours" => 'Ctrl+Enter'=> km::Ctrl|kb::Enter =>
        sub { $_[0]-> win_validate(0) }],
-   ["Recognition ~setup"  => sub { $_[0]-> win_showrec; }, ],
-   [ '-Apply' => "~Apply contours" => 'Alt+Enter'=> km::Alt|kb::Enter => q(win_applycontours)],
+   [ EditRecSetup => "Recognition ~setup"  => sub { $_[0]-> win_showrec; }, ],
+   [ '-EditApplyContours' => "~Apply contours" => 'Alt+Enter'=> km::Alt|kb::Enter => q(win_applycontours)],
    [],
-   [ 'Hackery' => "~Hack of the day" => q(win_hack_of_the_day)],
+   [ 'EditHack' => "~Hack of the day" => q(win_hack_of_the_day)],
 );
 
 my $w = MorphoWindow-> create(
@@ -2496,20 +2512,13 @@ my $w = MorphoWindow-> create(
       $wedt,
       ImageAppWindow::winmenu_view(),
       [],["~Help" => [
-         ["~About" => sub {Prima::MsgBox::message("PLab application series, Morphometry I, version 1.00", mb::OK|mb::Information)}],
-         ["~PLab Apps" => sub { $_[0]-> open_help(); }],
-         ["~Contents" => sub { $_[0]-> open_help("MorphometryI.html"); }],
+         [ HelpAbout =>  "~About" => sub {Prima::MsgBox::message("PLab application series, Morphometry I, version 1.00", mb::OK|mb::Information)}],
+         [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],
+         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("MorphometryI.html"); }],
       ]],
    ],
    accelItems => [
       ( map {[ "lw$_" => $_ => "Alt+$_" => "\@$_" => q(win_objectlwmenuaction)]} 1..9),
-      [],
-      ['~Increase line width' => 'Alt +' => '@+' => sub {
-         $_[0]-> win_objectlwmenuaction( 'lw'.($_[0]-> {ini}-> {'LW'.$_[0]-> {currentSet}} + 1));
-      }],
-      ['~Decrease line width' => 'Alt -' => '@-' => sub {
-         $_[0]-> win_objectlwmenuaction( 'lw'.($_[0]-> {ini}-> {'LW'.$_[0]-> {currentSet}} - 1));
-      }],
    ],
 );
 $w-> IV-> delegations(['MouseClick', 'Paint']);
