@@ -1,20 +1,22 @@
 use Config;
 use File::Basename qw(basename dirname);
 chdir(dirname($0));
-($file = basename($0)) =~ s/\.PL$//;
-$file =~ s/\.pl$//
+($file = basename($0)) =~ s/.PL$//;
+$file =~ s/.pl$//
         if ($Config{'osname'} eq 'VMS' or
             $Config{'osname'} eq 'OS2');  # "case-forgiving"
 open OUT,">$file" or die "Can't create $file: $!";
 chmod(0755, $file);
-print "Extracting $file (with variable substitutions)\n";
+print "Extracting $file (with variable substitutions)
+";
 
 print OUT <<"!GROK!THIS!";
 $Config{'startperl'} -w
-
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
+
+#!/usr/bin/perl -w
 
 
 use strict;
@@ -29,6 +31,7 @@ use IPA::Global;
 use IPA::Morphology;
 use IPA::Region;
 use Prima::VB::VBLoader;
+use XML::Parser;
 
 $::application-> icon( ImageAppGlyphs::icon( bga::processes));
 
@@ -36,6 +39,8 @@ $::application-> icon( ImageAppGlyphs::icon( bga::processes));
 package LenWindow;
 use vars qw(@ISA);
 @ISA = qw(ImageAppWindow::Calibrations);
+
+use constant MAXDATASET => 5;
 
 sub win_inidefaults
 {
@@ -58,6 +63,10 @@ sub win_inidefaults
       C_min_index        => 0,
       C_dilations        => 2,
       C_branch_radius    => 3,
+      active_datasets    => 2,
+      dataset_0_name     => 'cells',
+      dataset_1_name     => 'processes',
+      ( map { ( "dataset_${_}_name", "dataset " . ($_+1) ) } 2 .. MAXDATASET )
    );
 }
 
@@ -142,9 +151,10 @@ sub on_create
          origin => [ 356, 8],
 	 height => 20,
 	 valignment => ta::Middle,
-         onClick => sub {
-            if ( ! defined( $w-> { markState}) || $w-> { markState} < 2) {
-              $w-> reset_mark_state( $w-> {markState} ? 0 : 1);
+         onMouseDown => sub {
+            my ( $self, $btn, $mod, $x, $y) = @_;
+            if ( ! defined( $w-> { markState}) || $w-> { markState} < 16) {
+               $w-> reset_mark_state(( $mod & km::Shift) ? 'prev' : 'next');
             }
          }
       ],
@@ -152,6 +162,164 @@ sub on_create
    $w-> menu-> EditAutoCrispening-> checked( $w-> {ini}-> {autoCrispen});
    $w-> menu-> EditAutoStretching-> checked( $w-> {ini}-> {autoStretch});
    $w-> reset_mark_state;
+   $w-> {layers} = [ map { $w-> {ini}-> {"dataset_${_}_name"}} 0 .. $w->{ini}->{active_datasets} - 1];
+}
+
+sub xmlload
+{
+   my ( $w, $file, $recalculate) = @_;
+   my %state = ();
+   my ( $smin, $smax) = $w-> win_getseriesrange;
+   my %totals = ( Branches => 0, Length => 0, Cells => 0, Processes => 0);
+   $w-> {branches} = [];
+   $w-> {info} = {};
+   $w-> {layers} = [qw(cells processes)];
+
+   my $xml = new XML::Parser( Handlers => {
+      Start => sub {
+         my ($obj, $el, %attrs) = @_;
+         return if $state{finished_header};
+         if ($el eq 'prlens_data') {
+            return if $state{seen_header};
+            $state{prlens_data} = {%attrs};
+            $state{seen_header} = 1;
+            for ( qw( lines filemaskwidth xcalib ycalib )) {
+               die "No tag:$_" unless defined $attrs{$_};
+            }
+
+            # calibrations
+            if ( $attrs{xcalib} != $w->{ ini}->{ XCalibration} ||
+                 $attrs{ycalib} != $w->{ ini}->{ YCalibration}) {
+                 my $x = $attrs{xcalib} != $w->{ ini}->{ XCalibration};
+                 my $y = $attrs{ycalib} != $w->{ ini}->{ YCalibration};
+               if ( Prima::MsgBox::message("Image contains calibrations [$attrs{xcalib} $attrs{ycalib}] opposite to current [".
+                          $w->{ini}->{XCalibration}.' '.$w->{ini}->{YCalibration}.']. '.
+                          "Keep current settings?",
+                          mb::YesNo|mb::Warning, { buttons => { mb::No , { text => '~Apply new'}}}) == mb::Yes) {
+                  $w-> modified( 1);
+               } else {
+                  $w->{ini}->{XCalibration} = $attrs{xcalib};
+                  $w->{ini}->{YCalibration} = $attrs{ycalib};
+               }
+            }
+
+            # nlines 
+            if ( $attrs{lines} != $w->{ ini}->{ nLines}) {
+               if ( Prima::MsgBox::message("Image contains $attrs{lines} lines opposite to current $w->{ini}->{nLines} ".
+                          "Keep current settings?",
+                          mb::YesNo|mb::Warning, { buttons => { mb::No , { text => '~Apply new'}}}) == mb::Yes) {
+                  $w-> modified( 1);
+               } else {
+                  $w->{ini}->{nLines} = $attrs{lines};
+               }
+            }
+
+            # datasets
+            if ( exists $attrs{datasets}) {
+               my $id = 2;
+               for ( split( ',', $attrs{datasets})) {
+                  push @{$w-> {layers}}, $_;
+                  $w-> {ini}-> {"dataset_${id}_name"} = $_;
+                  $w-> {"total$_"} = $w-> {"n$_"} = 0;
+                  $id++;
+               }
+               $w-> {ini}-> {active_datasets} = ( $id > 10) ? 10 : $id;
+            } else {
+               $w-> {ini}-> {active_datasets} = 2;
+            }
+         } elsif ( $el eq 'record') {
+            return unless $state{seen_header};
+            return if $state{reading_record};
+            $state{reading_record} = 1;
+            for ( qw( index)) {
+               die "No tag:$_" unless defined $attrs{$_};
+            }
+            $state{record_index} = $attrs{index};
+            $state{branch_index} = 0;
+            die "Invalid index $attrs{index}" unless $attrs{index} =~ /^\d+$/;
+         } elsif ( $el eq 'layer') {
+            return unless $state{seen_header} && $state{reading_record};
+            return if $state{reading_layer} || $state{reading_branch};
+            $state{reading_layer} = 1;
+            for ( qw( type number points)) {
+               die "No tag:$_" unless defined $attrs{$_};
+            }
+            my $lctype = lc $attrs{type};
+            my $uctype = ucfirst $lctype;
+            my @data = split(',', $attrs{points});
+            die "Inconsistent number of '$lctype' points in index $state{record_index}" unless
+               $attrs{number} =~ /^\d+$/ && $attrs{number} == scalar @data;
+
+            # handle current frame
+            if ( $state{record_index} == $w-> {fileNum}) {
+               $w-> {'n' . $uctype} = scalar @data;
+               $w-> { $lctype} = [ @data ];
+            } elsif ( $state{record_index} == $smin) {
+            # handle first frame
+               $w-> {'ex' . $uctype} =  [ @data ];
+            }
+            # store record
+            $w-> {info}->{$state{record_index}}-> {$lctype} = [@data];
+            $totals{$uctype} += scalar @data;
+         } elsif ( $el eq 'branch') {
+            return unless $state{seen_header} && $state{reading_record};
+            return if $state{reading_layer} || $state{reading_branch};
+            $state{reading_branch} = 1;
+            for ( qw( start outline length)) {
+               die "No tag:$_" unless defined $attrs{$_};
+            }
+            die "Invalid 'length' attribute in branch \#$state{record_index}" unless
+               $attrs{length} =~ m/^[\d\.]+$/;
+            die "Invalid 'start' attribute in branch \#$state{record_index}" unless
+               $attrs{start} =~ m/^\s*(\d+)\s*(\d+)\s*$/;
+            my ( $x, $y) = ( $1, $2);
+            my @data = ([$x, $y]);
+            while ( $attrs{outline} =~ m/([\+\-]\d+)([\+\-]\d+)/g) {
+               $x += $1;
+               $y += $2;
+               push @data, [ $x, $y];
+            }
+            $w-> {info}->{$state{record_index}}->{branches}->[$state{branch_index}] = \@data;
+            $w-> {branches} = $w-> {info}->{$state{record_index}}->{branches} if 
+               $state{record_index} == $w-> {fileNum};
+            $totals{Branches}++;
+            $totals{Length} += $attrs{length};
+         }
+      }, End => sub {
+         my ($obj, $el) = @_;
+         $state{finished_header} = 1 if $el eq 'prlens_data';
+         $state{reading_record}  = 0 if $el eq 'record';
+         $state{reading_layer}  = 0 if $el eq 'layer';
+         if ( $el eq 'branch') {
+            $state{reading_branch} = 0;
+            $state{branch_index}++;
+         }
+      },
+   });
+   eval { parsefile $xml $file; };
+   if ($@) {
+      $w-> win_xmlerror( $file);
+      return;
+   }
+   $w-> {'total' . $_} = $totals{$_} for keys %totals;
+}
+
+sub win_abortpacket { $_[0]-> {packetAborted} = 1 }
+
+sub win_xmlerror
+{
+   # bad
+   my ($w, $xmlname) = @_;
+   my $at = $@;
+   Prima::MsgBox::message("Cannot load $xmlname", mb::OKCancel,
+         { buttons => { mb::Cancel => {
+            text        => '~Details >>',
+            modalResult => 0,
+            onClick     => sub {
+               Prima::MsgBox::message_box( "XML loader diagnostics", "$xmlname:$at", mb::OK|mb::NoSound);
+            },
+     }}});
+   $w-> win_abortpacket;
 }
 
 sub load_info
@@ -161,9 +329,19 @@ sub load_info
    my $file = $w-> win_extname( $w-> {file});
    $file =~ s/\d{$cpm}(\.pls)$/$1/;
    $w-> {info} = {};
-   my $info = $w-> {info};
+   $w-> {layers} = [ 'cells', 'processes'];
+   $w-> {ini}-> {active_datasets} = 2;
    $w-> {totalCells} = $w-> {totalProcesses} = $w-> {totalLength} = $w-> {totalBranches} = 0;
+
    return unless open INFO, $file;
+
+   $_=<INFO>; chomp;
+   if ( m/xml/) { # new style
+      close INFO;
+      return $w-> xmlload( $file, $recalculate);
+   } # else first line is skipped, but anyway it's always comment
+   
+   my $info = $w-> {info};
    my ($totalCells,$totalProcesses,$totalBranches,$totalLength) = (0,0,0,0);
    my ( $smin, $smax) = $w-> win_getseriesrange;
 
@@ -228,41 +406,34 @@ sub load_info
       $totalProcesses += $np;
       $totalLength += $abl if $abl;
       $totalBranches += scalar( @branches);
-      $info-> {$fn} = $_;
+      my $fninfo = $info-> {$fn} = {
+         cells     => [],
+         processes => [],
+         branches  => [],
+      };
       my ( $isCurrentFrame) = $fn == $w-> {fileNum};
+      $ccm =~ tr[_][\ ];
+      my @cells = split ',', $ccm;
+      Prima::message("Bad number of cells") if scalar @cells != $nc;
+
+      $cpm =~ tr[_][\ ];
+      my @processes = split ',', $cpm;
+      Prima::message("Bad number of processes") if scalar @processes != $np;
 
       if ( $fn == $smin && !$isCurrentFrame) {
-         $ccm =~ tr[_][\ ];
-         my @cells = split ',', $ccm;
-         Prima::message("Bad number of cells") if scalar @cells != $nc;
-
-         $cpm =~ tr[_][\ ];
-         my @processes = split ',', $cpm;
-         Prima::message("Bad number of processes") if scalar @processes != $np;
-
          $w-> {exCells} = [@cells];
          $w-> {exProcesses} = [@processes];
-         undef @cells;
-         undef @processes;
       }
       
-      if ( $isCurrentFrame)
-      {
-         $ccm =~ tr[_][\ ];
-         my @cells = split ',', $ccm;
-         Prima::message("Bad number of cells") if scalar @cells != $nc;
-
-         $cpm =~ tr[_][\ ];
-         my @processes = split ',', $cpm;
-         Prima::message("Bad number of processes") if scalar @processes != $np;
-
+      if ( $isCurrentFrame) {
          $w-> {nCells} = scalar @cells;
          $w-> {nProcesses} = scalar @processes;
-         $w-> {cells} = [@cells];
+         $w-> {cells}     = [@cells];
          $w-> {processes} = [@processes];
-         undef @cells;
-         undef @processes;
       }
+
+      $fninfo->{cells} = \@cells;
+      $fninfo->{processes} = \@processes;
 
       if ( $isCurrentFrame || $recalculate) {
          $w->{ branches} = [] if $isCurrentFrame;
@@ -286,11 +457,12 @@ sub load_info
             $bnum++;
          }
          $w->{ branches} = $pb if $isCurrentFrame;
+         $fninfo->{branches} = $pb;
          $abl = sprintf "%.3f", $w-> calc_branches_length( $pb);
          $ccm =~ tr[\ ][_];
          $cpm =~ tr[\ ][_];
          $cbm =~ tr[\ ][_];
-         $info->{ $fn} = "$nc $np $fn\:\:$ccm\:\:$cpm\:\:$abl\&$cbm\n";
+         # $info->{ $fn} = "$nc $np $fn\:\:$ccm\:\:$cpm\:\:$abl\&$cbm\n";
          undef @branches;
       }
    }
@@ -309,69 +481,88 @@ sub save_info
    return 1 unless defined $file;
    my $info = $w-> {info};
    return 1 unless defined $info;
-
+   my $fnx = '%0' . $$w{cypherMask} . 'd';
+   $fnx = sprintf $fnx, ( $w-> {fileNum} || 0);
+   $info->{$fnx}->{$_} = $w-> {$_} for (@{$w->{layers}}, 'branches');
+   my $xmlname = $w-> win_extname( $w-> {file});
    my ( $cpm) = ( $w-> {cypherMask});
-   my $infoFile = $w-> win_extname( $w-> {file});
-   $infoFile =~ s/\d{$cpm}(\.pls)$/$1/;
-   
-   if ( defined $w-> {nCells} && defined $w-> {nProcesses} &&
-        defined $w-> {cells} && defined $w-> {processes})
-   {
-      my $pp = join( ',', @{$w-> {processes}});
-      my $cc = join( ',', @{$w-> {cells}});
-      my $bb = '';
-      if ( defined( $w->{ branches}) && ( scalar( @{ $w->{ branches}}) > 0)) {
-         $bb = sprintf "%.3f&", $w-> calc_branches_length( $w->{ branches});
-         my ( $branch);
-         my ( $comma) = '';
-         foreach $branch ( @{ $w->{ branches}}) {
-            next unless scalar( @{ $branch}) > 1;
-            $bb .= $comma;
-            my ( $x, $y) = @{ $branch->[ 0]};
-            $bb .= "${x}_$y";
-            my ( $i);
-            for ( $i = 1; $i <= $#{ $branch}; $i++) {
-               $bb .= sprintf "%+d%+d", $branch->[ $i]->[ 0] - $x, $branch->[ $i]->[ 1] - $y;
-               $x = $branch->[ $i]->[ 0];
-               $y = $branch->[ $i]->[ 1];
-            }
-            $comma = ',';
+   $xmlname =~ s/\d{$cpm}(\.pls)$/$1/;
+   unless ( open F, "> $xmlname") {
+      if ( $w->{silence}) {
+         $w-> win_abortpacket;
+         return 0;
+      }
+      return 0 if Prima::MsgBox::message(
+         "Error saving file $xmlname. Ignore changes?", mb::YesNo|mb::Warning) == mb::No;
+   }
+   my $datestr = scalar(localtime(time));
+   my ($ix,$iy) = $w-> IV-> image-> size;
+   my @l = @{$w->{layers}};
+   my $sets = join(',', @l[2 .. $#l]);
+
+print F <<HEADER;
+<?xml version="1.0"?>
+<!DOCTYPE prlens_data SYSTEM "prlens_data.dtd">
+<!-- This is a generated file.  Do not edit! -->
+<prlens_data
+  series         = "$w->{fileBeg}"
+  imageext       = "$w->{fileEnd}"
+  imagewidth     = "$ix"
+  imageheight    = "$iy"
+  creator        = "PrLenS"
+  creationdate   = "$datestr"
+  xcalib         = "$w->{ini}->{XCalibration}"
+  ycalib         = "$w->{ini}->{YCalibration}"
+  filemaskwidth  = "$w->{cypherMask}"
+  lines          = "$w->{ini}->{nLines}"
+  datasets       = "$sets"
+HEADER
+   printf F "  total%-10s= \"%d\"\n", ucfirst, $w->{'total'.ucfirst} for @l;
+   print F ">\n";
+  
+   for ( sort keys %$info) {
+      print F "<record index=\"$_\">\n";
+      my $r = $info->{$_};
+      for ( keys %$r) {
+         if ( $_ eq 'branches') {
+            for ( @{$r->{$_}}) {
+               my $br = $_;
+               my ( $x, $y) = @{$$br[0]};
+               my ( $sx, $sy) = ( $x, $y);
+               my $first = 0;
+               my $outline = '';
+               for ( @$br) {
+                  next unless $first++;
+                  my ( $nx, $ny) = @$_;
+                  $outline .= sprintf("%+d%+d", $nx - $x, $ny - $y);
+                  $x = $nx;
+                  $y = $ny;
+               }
+               my $len = sprintf "%.3f", $w-> calc_branch_length( $br);
+               print F <<BRANCH;
+  <branch start="$sx $sy"
+    outline="$outline"
+    length="$len"
+  />
+BRANCH
+           }
+         } else {
+            my $d = $r->{$_};
+            my $nd = scalar @$d;
+            my $xd = join ',', @$d;
+            print F <<LAYER;
+  <layer type="$_"
+    number="$nd"
+    points="$xd"
+  />
+LAYER
          }
       }
-      $pp =~ tr{\ }{_};
-      $cc =~ tr{\ }{_};
-      
-      my $fnx = '%0' . $$w{cypherMask} . 'd';
-      $fnx = sprintf $fnx, ( $w-> {fileNum} || 0);
-      $info-> {$fnx} = scalar @{$w-> {cells}} . " " . scalar @{$w-> {processes}} . " " .
-                        "${fnx}::" . $cc . "::" . $pp . "::" . $bb . "\n";
+      print F "</record>\n";
    }
-   unless ( open INFO, ">$infoFile") {
-      return 0 if Prima::MsgBox::message_box( $::application-> name,
-         "Error saving file $infoFile ($!). Ignore changes?", mb::YesNo|mb::Warning) == mb::No;
-      return 1;
-   }
-   
-   unless ( -w INFO) {
-      close INFO;
-      return 0 if Prima::MsgBox::message_box( $::application-> name,
-         "Error saving $infoFile: file is read-only. Ignore changes?", mb::YesNo|mb::Warning) == mb::No;
-      return 1;
-   }
+   print F "</prlens_data>\n";
 
-   print INFO "# Number of Test Lines used (may be incorrect): ", $w-> {ini}-> { nLines}, "\n";
-   my $stattext = "#\n " . $w-> generate_statistics_text();
-   $stattext =~ s/^/# /gm;
-   $stattext .= "# \n";
-   print INFO $stattext;
-   print INFO "#*Calibrations: $w->{ ini}->{ XCalibration} $w->{ ini}->{ YCalibration}\n";
-   foreach ( sort { $a <=> $b } keys %$info)
-   {
-      print INFO $info-> {$_};
-   }
-   print INFO $w-> {totalCells} . " " . $w-> {totalProcesses} . " **::" .
-         ($w-> {totalCells} ? $w-> {totalProcesses} / $w-> {totalCells} : "NONE") . "::\n";
-   close INFO;
+   close F;
    return 1;
 }
 
@@ -488,7 +679,7 @@ sub draw_processes {
    $w->{ binfo}->{ drawMode} = 0;
    undef $w->{ binfo}->{ nearestBranch};
    undef $w->{ binfo}->{ prevActiveRect};
-   $w-> reset_mark_state(( defined( $w-> {markState}) && ( $w-> {markState} == 2) ? undef : 2))
+   $w-> reset_mark_state(( defined( $w-> {markState}) && ( $w-> {markState} == 16) ? undef : 16))
       if defined $w-> {file};
    $w-> reset_mark_state( $w, undef) unless defined $w-> {file};
 }
@@ -512,14 +703,12 @@ sub win_newframe
 {
    my $w = $_[0];
    $w-> SUPER::win_newframe;
-   $w-> {nCells}     = 0;
-   $w-> {nProcesses} = 0;
-   $w-> {totalCells} = 0;
-   $w-> {totalProcesses} = 0;
-   $w-> {processes} = [];
-   $w-> {exProcesses} = [];
-   $w-> {cells} = [];
-   $w-> {exCells} = [];
+   for ( @{$w->{layers}}) {
+      my $c = ucfirst $_;
+      $w-> {$_} = [];
+      $w-> {"ex$c"} = [];
+      $w-> {"n$c"} = $w-> {"total$c"} = 0;
+   }
    $w-> {branches} = [];
    $w-> modified(0);
    $w-> reset_mark_state; 
@@ -599,27 +788,36 @@ sub reset_mark_state
    my ( $w, $state)  = @_;
    unless ( defined $state) {
       my $x = $w-> {markStateX} || 0;
-      $state = defined($w-> {file}) ? $x : ( $x | 64);
+      $state = defined($w-> {file}) ? $x : ( $x | 0x10000);
+   } elsif ( $state =~ /^next|prev$/ && defined $w->{file}) {
+      if ( defined $w-> {markStateX} && ($w-> {markStateX} & 0x10)) {
+         $state = 0;
+      } else {
+         $state = ($w->{markState} || 0) + (( $state eq 'next') ? 1 : -1);
+         $state = 0 if $state >= $w->{ini}->{active_datasets};
+         $state = $w->{ini}->{active_datasets} - 1 if $state < 0;
+      }
+   } elsif ( $state eq 'draw' && defined $w->{file}) {
+      $state = 0x10;
    }
+
    my $markState = $w-> ToolBar-> MarkState;
-   my $markStateEx =  $w-> ToolBar-> MarkStateEx;
-   if ( $state & 64) {
+   my $markStateEx = $w-> ToolBar-> MarkStateEx;
+   if ( $state & 0x10000) {
       $markState-> text( "Nothing to mark");
       $markStateEx-> color( 0);
       return;
    }
-   if (( $state & 3) == 0) {
-      $markState-> text( "Marking processes");
-      $markStateEx-> color( $w-> {ini}-> {Color_Processes});
-   } elsif (( $state & 3) == 1) {
-      $markState-> text( "Marking cells");
-      $markStateEx-> color( $w-> {ini}-> {Color_Cells});
-   } elsif (( $state & 3) == 2) {
+   if ( $state & 0x10) {
       $markState-> text( "Drawing processes" . ( $w->{ binfo}->{ drawMode} ? " (drawing)" : "")) ;
       $markStateEx-> color( 0);
+   } else {
+      my $layer = $w-> {layers}->[$state];
+      $markState-> text( "Marking $layer");
+      $markStateEx-> color( $w-> {ini}-> {"Color_" . (( $state < 2) ? ucfirst $layer : "Dataset$state")});
    }
    $w-> {markStateX} = $state;
-   $w-> {markState} = ($state & 64) ? undef : $state;
+   $w-> {markState} = ($state & 0x10000) ? undef : $state;
 }
 
 
@@ -627,7 +825,7 @@ sub initiate_draw_mode
 {
    my ( $w, $x, $y) = @_;
    my $self = $w-> IV;
-   return unless ( $w->{ markState} == 2) && ( ! $w->{ binfo}->{ drawMode});
+   return unless ( $w->{ markState} == 16) && ( ! $w->{ binfo}->{ drawMode});
    $w->{ binfo}->{ drawMode} = 1;
    $w->{ binfo}->{ removeLastPoint} = 1;
    $w-> iv_cancelmagnify( $self);
@@ -635,7 +833,7 @@ sub initiate_draw_mode
    $w->{ binfo}->{ branchNumber} = scalar @{ $w->{ branches}};
    $w->{ branches}->[ $w->{ binfo}->{ branchNumber}]->[ 0] = [ $self-> screen2point( $x, $y)];
    $w-> modified( 1); 
-   $w-> reset_mark_state( 2);
+   $w-> reset_mark_state( 'draw');
 }
 
 # Function calculates distance from a point at ( x3, y3)
@@ -707,7 +905,7 @@ sub calc_branches_length {
 
 sub done_draw_mode {
    my $w = $_[0];
-   return unless defined( $w->{ markState}) && ( $w->{ markState} == 2)
+   return unless defined( $w->{ markState}) && ( $w->{ markState} == 16)
        && $w->{ binfo}->{ drawMode};
    $w->{ binfo}->{ drawMode} = 0;
    $w->{ binfo}-> {firstDraw} = 0;
@@ -732,7 +930,7 @@ sub done_draw_mode {
       }
    }
    $w-> IV-> capture(0);
-   $w-> reset_mark_state( 2);
+   $w-> reset_mark_state( 'draw');
    $w-> IV-> repaint;
 }
 
@@ -987,6 +1185,7 @@ sub process
    $::application-> pointer( $w-> {savePointer});
    $w-> {savePointer} = undef;
 }
+
 sub process_series
 {
    my $w = $_[0];
@@ -1000,6 +1199,7 @@ sub process_series
    my $f;   
    my $ok = 1;
    $w->{packetAborted} = 0;
+   $w->{silence} = 1;
 
    my $userAborted = 0;
    my $statwin = $w-> insert( Dialog =>
@@ -1046,6 +1246,7 @@ sub process_series
        $g-> value( $i);
    }
    $statwin-> destroy;
+   $w->{silence} = 0;
    
    if ( $ok) {
       Prima::MsgBox::message("Queue processed", mb::OK|mb::Information);
@@ -1112,7 +1313,7 @@ sub IV_MouseDown
 {
    my ( $w, $self, $btn, $mod, $x, $y) = @_;
    if ( ( ( $btn & mb::Left) == mb::Left)
-           && ( defined $w->{ markState}) && ( $w->{ markState} == 2)
+           && ( defined $w->{ markState}) && ( $w->{ markState} == 16)
            && ( ( ! defined $w->{ binfo}) || ( ! $w->{ binfo}->{ drawMode}))) {
        $w-> initiate_draw_mode( $x, $y); 
        $self-> clear_event;
@@ -1121,16 +1322,9 @@ sub IV_MouseDown
 
    if ( $btn == mb::Right && !( $mod & km::Ctrl)) 
    {
-      if ( ! defined( $w-> { markState}) || $w-> { markState} < 2)
+      if ( ! defined( $w-> { markState}) || $w-> { markState} < 16)
       {
-         if ( $w-> {markState})
-         {
-            $w-> reset_mark_state( 0);
-         }
-         else
-         {
-            $w-> reset_mark_state( 1);
-         }
+         $w-> reset_mark_state(( $mod & km::Shift) ? 'prev' : 'next');
       }
       else {
          if ( $w->{ binfo}->{ drawMode}) {
@@ -1173,7 +1367,7 @@ sub IV_MouseMove
    
    $w-> SUPER::IV_MouseMove( $self, $mod, $x, $y);
 
-   return if !defined $w-> {binfo} || !defined $w-> {markState} || $w-> {markState} != 2;
+   return if !defined $w-> {binfo} || !defined $w-> {markState} || $w-> {markState} != 16;
 
    if ( $w->{ binfo}->{ drawMode} == 1) {
       my ( $bn) = $w->{ binfo}->{ branchNumber};
@@ -1257,17 +1451,20 @@ sub IV_MouseClick
    $self-> clear_event;
    return unless defined $w-> {file};
 
+   if ( $dbl && $btn == mb::Right && !( $mod & km::Ctrl)) {
+      $w-> reset_mark_state(( $mod & km::Shift) ? 'prev' : 'next');
+      return;
+   }
+
    return unless $btn == mb::Left;
    return unless defined $w-> {markState};
    my ( $ax, $ay) = $self-> screen2point( $x, $y);
    return unless ( $ax >= 0 && $ay >= 0 && $ax < $w->{IVx} && $ay < $w->{IVy});
    my $ary = undef;
-   $ary = $w-> {processes} if $w-> {markState} == 0;
-   $ary = $w-> {cells}     if $w-> {markState} == 1;
-   $ary = $w-> {branches}  if $w->{ markState} == 2;
+   $ary = ($w->{ markState} == 16) ? $w-> {branches} : $w-> {$w-> {layers}->[$w-> {markState}]};
    return unless defined $ary;
 
-   if ( $w->{ markState} == 2) {
+   if ( $w->{ markState} == 16) {
       if ( ! $w->{ binfo}->{ drawMode}) {
          $w-> initiate_draw_mode( $x, $y);
       }
@@ -1291,14 +1488,13 @@ sub IV_MouseClick
       }
 
       $w-> modified( 1); 
+      my $layer = ucfirst $w-> {layers}->[$w-> {markState}];
       if ( $i < scalar @$ary)
       {
          # removing existing point
          ($ax, $ay) = split(' ', splice( @$ary, $i, 1));
-         $w-> {nCells}-- if $w-> {markState} == 1;
-         $w-> {nProcesses}-- if $w-> {markState} == 0;
-         $w-> {totalCells}-- if $w-> {markState} == 1;
-         $w-> {totalProcesses}-- if $w-> {markState} == 0;
+         $w-> {"n$layer"}--;
+         $w-> {"total$layer"}--;
       }
       else
       {
@@ -1306,10 +1502,8 @@ sub IV_MouseClick
 	 $ax = int($ax);
 	 $ay = int($ay);
          push @$ary, "$ax $ay";
-         $w-> {nCells}++ if $w-> {markState} == 1;
-         $w-> {nProcesses}++ if $w-> {markState} == 0;
-         $w-> {totalCells}++ if $w-> {markState} == 1;
-         $w-> {totalProcesses}++ if $w-> {markState} == 0;
+         $w-> {"n$layer"}++;
+         $w-> {"total$layer"}++;
       }
       ($x1, $x2, $y1, $y2) = map { ($_ - 6, $_ + 6); } ($ax,$ay);
       $self-> invalidate_rect( $self-> point2screen( $x1, $y1, $x2, $y2));
@@ -1327,12 +1521,18 @@ sub update_state
       $cp-> text( "???:???");
    }
    else
-   {
-      $w-> sb_text( "Cells: ". $w-> {nCells} . "(" . $w-> {totalCells} . ")" .
-                     ",   Processes: ". $w-> {nProcesses} . "(" . $w-> {totalProcesses} . ")" .
-                     ",   Ratio: " . ($w-> {totalCells} ? $w-> {totalProcesses} / $w-> {totalCells} : "NONE")
-      );
-      $cp-> text( sprintf( "%03d:%03d", $w-> {nCells}, $w-> {nProcesses}));
+   { 
+       my $text1 = '';
+       my @text2;
+       for ( @{$w->{layers}}) {
+          my $u = ucfirst $_;
+          $text1 .= "$u: ".$w->{"n$u"}." (".$w->{"total$u"}.") ";
+          next if $_ eq 'cells';
+          push @text2, "(" . ($w->{totalCells} ? sprintf("%.3g",$w->{"total$u"} / $w->{totalCells}) 
+                                               : "NONE") . ")";
+       }
+       $w-> sb_text( $text1 . ' Ratio: '. join(',',@text2));
+       $cp-> text( join( ':', map { sprintf "%03d", $w->{ 'n' . ucfirst $_} } @{$w->{layers}}));
    }
    $w-> show_stats( undef, 1);
 }
@@ -1375,36 +1575,24 @@ sub IV_Paint
       $canvas-> line( $dx, $dy + $szy*$i, $iw - $dx, $dy + $szy*$i);
    }
 
-   $canvas-> color( $w-> {ini}-> {Color_Cells});
-   
-   foreach (@{$w-> {cells}}) {
-      my ($x, $y) = split;
-      $canvas-> fill_ellipse( $x * $z, $y * $z, $zp, $zp);
-   }
-   if ( $w-> {ini}-> {ShowExtras}) {
-      foreach (@{$w-> {exCells}}) {
+   for ( 0 .. MAXDATASET) {
+      my $layer = $w-> {layers}->[$_];
+      last unless defined $layer;
+      my $color = ( $_ < 2 ) ? ucfirst $layer : "Dataset$_";
+      $canvas-> color( $w-> {ini}-> {"Color_$color"});
+      foreach (@{$w-> {$layer}}) {
          my ($x, $y) = split;
-         $x *= $z; $y *= $z;
-         $canvas-> line( $x - 3, $y - 3, $x + 3, $y + 3);
-         $canvas-> line( $x - 3, $y + 3, $x + 3, $y - 3);
+         $canvas-> fill_ellipse( $x * $z, $y * $z, $zp, $zp);
+      }
+      if ( $w-> {ini}-> {ShowExtras}) {
+         foreach (@{$w-> {"ex" . ucfirst $layer}}) {
+            my ($x, $y) = split;
+            $x *= $z; $y *= $z;
+            $canvas-> line( $x - 3, $y - 3, $x + 3, $y + 3);
+            $canvas-> line( $x - 3, $y + 3, $x + 3, $y - 3);
+         }
       }
    }
-   
-
-   $canvas-> color( $w-> {ini}-> {Color_Processes});
-   foreach (@{$w-> {processes}})
-   {
-      my ($x, $y) = split;
-      $canvas-> fill_ellipse( $x * $z, $y * $z, $zp, $zp);
-   }
-   if ( $w-> {ini}-> {ShowExtras}) {
-      foreach (@{$w-> {exProcesses}}) {
-         my ($x, $y) = split;
-         $x *= $z; $y *= $z;
-         $canvas-> line( $x - 3, $y - 3, $x + 3, $y + 3);
-         $canvas-> line( $x - 3, $y + 3, $x + 3, $y - 3);
-      }
-   }   
 
    my $lw = $canvas->lineWidth;
    $canvas->lineWidth( 1);
@@ -1427,12 +1615,14 @@ sub IV_Paint
 
 sub opt_colors
 {
+   my $i = $_[0]->{ini} ? $_[0]->{ini} : {$_[0]-> win_inidefaults};
    return {
       'Frame'         => [ cl::LightMagenta, 'Frame'],
       'Processes'     => [ cl::Blue,       'Process'],
       'Branches'      => [ cl::LightGreen, 'Branches'],
       'ActiveProcess' => [ 0x80FF80,       'Active process'],
       'Cells'         => [ cl::LightRed,   'Cells'],
+      ( map { ( "Dataset$_", => [ cl::White / $_,   $i->{"dataset_${_}_name"}] ) } 2 .. MAXDATASET )
    };
 }
 
@@ -1468,7 +1658,6 @@ sub opt_propcreate
    ] , [ Label =>
        origin => [ 10, 125],
        width  => 120,
-       autoWidth => 1,
        text   => 'Number of lines',
    ], [ CheckBox => 
        origin  => [ 10, 155],
@@ -1476,6 +1665,17 @@ sub opt_propcreate
        name    => 'ShowExtras',
        text    => '~Show extra markings',
        hint    => "If on, the markings on the first image in the series\nwill be displayed as crosses",
+   ], [ SpinEdit => 
+       origin => [ 190, 105],
+       width  => 120,
+       min    => 2,
+       max    => MAXDATASET,
+       name   => 'Datasets',
+       hint   => 'Number of visible types of data points sets. By default is 2, cells and processes', 
+   ], [ Label => 
+       origin => [ 190, 125],
+       autoWidth => 1,
+       text      => 'Number of datasets',
    ]);
    my $slider = $nb-> insert_to_page( 4, [ Widget => 
        origin  => [ 20, 70],
@@ -1584,6 +1784,7 @@ sub opt_proppush
    my ( $w, $dlg, $nb, $nbpages) = @_;
    $w-> SUPER::opt_proppush( $dlg, $nb, $nbpages);
    $nbpages-> nLines-> value( $w->{ini}->{nLines});
+   $nbpages-> Datasets-> value( $w->{ini}->{active_datasets});
    $nbpages-> ShowExtras-> checked( $w-> {ini}-> {ShowExtras});
    my $ssl = $nbpages-> StretchSlider;
    $ssl-> {saveMin} = $ssl-> {min} = $w->{ini}->{SpectrumMin};
@@ -1605,11 +1806,23 @@ sub opt_proppop
    my $ssl = $nbpages-> StretchSlider;
    if ( $mr) {
       $w->{ini}->{nLines} = $nbpages-> nLines-> value;
+      my $ad = $w->{ini}->{active_datasets};
+      $w->{ini}->{active_datasets} = $nbpages-> Datasets-> value;
+      if ( $ad != $w->{ini}->{active_datasets}) {
+         $w-> modified(1) if defined $w-> {file};
+         $w-> reset_mark_state( 0) if defined $w-> {markState} && $w-> {markState} >= $w->{ini}->{active_datasets};
+         $w-> {layers} = [ map { $w-> {ini}-> {"dataset_${_}_name"}} 0 .. $w->{ini}->{active_datasets} - 1];
+         for ( @{$w-> {layers}}) {
+            my $u = ucfirst $_;
+            $w->{$_} ||= [];
+            $w->{"ex$u"} ||= [];
+            $w->{"$_$u"} ||= 0 for qw(n total);
+         }
+      }
       $w-> {ini}-> {ShowExtras} = $nbpages-> ShowExtras-> checked;
       my ( $a, $b) = ($ssl-> {min},$ssl-> {max});
       if ( ($w->{ini}->{SpectrumMin} != $a) ||
            ($w->{ini}->{SpectrumMax} != $b)) {
-         
          $w->{ini}->{SpectrumMin} = $a;
          $w->{ini}->{SpectrumMax} = $b;
          $w-> preprocess;
@@ -1674,3 +1887,4 @@ $w-> win_loadfile( $ARGV[0]) if @ARGV;
 run Prima;
 
 !NO!SUBS!
+
