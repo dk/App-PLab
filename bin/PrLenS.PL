@@ -648,8 +648,8 @@ sub preprocess
       my $i = $w-> {preprocessedImage} || $self-> image;
       $w-> {preprocessedImage} = $i-> dup;
       my ( $lo, $hi, $min, $max) = ( $i-> rangeLo, $i-> rangeHi, $w-> {ini}-> {SpectrumMin}, $w-> {ini}-> {SpectrumMax});
-      my $lo1 = int( $lo + $min * ( $hi - $lo) / 255);
-      my $hi1 = int( $hi - ( 255 - $max) * ( $hi - $lo) / 255);
+      my $lo1 = ( $lo > $min ) ? $min : $lo;
+      my $hi1 = ( $hi < $max ) ? $hi : $max;
       $w-> {preprocessedImage}-> resample( $lo1, $hi1, 0, 255);
    }
 }
@@ -949,7 +949,7 @@ sub IV_Paint
    foreach (@{$w-> {processes}})
    {
       my ($x, $y) = split;
-      $canvas-> fill_ellipse( $x * $z, $y * $z, 4, 4);
+      $canvas-> fill_ellipse( $x * $z, $y * $z, 4 * $z, 4 * $z);
    }
    if ( $w-> {ini}-> {ShowExtras}) {
       foreach (@{$w-> {exProcesses}}) {

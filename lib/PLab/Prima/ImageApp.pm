@@ -283,7 +283,7 @@ sub on_create
    my $colors = $w-> opt_colors;
    push ( @iniDefaults, 
       map { 
-         ( "Key_$_", $keys->{$_}->[0]) 
+         ( "Key_$_", "'" . $keys->{$_}->[0] . "'") 
       } keys %$keys);
    push( @iniDefaults, 
       map { 
