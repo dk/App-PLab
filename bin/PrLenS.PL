@@ -184,7 +184,7 @@ sub load_info
                       if ( Prima::MsgBox::message("Image contains calibrations [$xcalib $ycalib] opposite to current [".
                           $w->{ini}->{XCalibration}.' '.$w->{ini}->{YCalibration}.']. '.
                           "Keep current settings?",
-                          mb::YesNo|mb::Warning, { buttons => { mb::No => { text => '~Apply new'}}}) == mb::Yes) {
+                          mb::YesNo|mb::Warning, { buttons => { mb::No , { text => '~Apply new'}}}) == mb::Yes) {
                           $w-> modified( 1);
                       } else {
                           $w->{ini}->{XCalibration} = $xcalib;
