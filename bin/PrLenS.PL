@@ -5,6 +5,11 @@ use PLab::Prima::ImageApp;
 use PLab::Prima::Calibrations;
 use IPA::Local;
 use IPA::Misc;
+use IPA::Point;
+use IPA::Global;
+use IPA::Morphology;
+use IPA::Region;
+use Prima::VB::VBLoader;
 
 $::application-> icon( ImageAppGlyphs::icon( bga::processes));
 
@@ -25,6 +30,16 @@ sub win_inidefaults
       SpectrumMin        => 0,
       SpectrumMax        => 50,
       ShowExtras         => 0,
+      C_minUF            => 1,
+      C_maxUF            => 5,
+      C_stepUF           => 10,
+      C_min_area         => 200,
+      C_min_rank         => 1,
+      C_max_index        => 255,
+      C_min_index        => 60,
+      C_dilations        => 2,
+      C_erosions         => 1,
+      C_cell_radius      => 25,
    );
 }
 
@@ -95,8 +110,8 @@ sub on_create
 	 valignment => ta::Middle,
       ],
    );
-   $w-> menu-> AutoCrispening-> checked( $w-> {ini}-> {autoCrispen});
-   $w-> menu-> AutoStretching-> checked( $w-> {ini}-> {autoStretch});
+   $w-> menu-> EditAutoCrispening-> checked( $w-> {ini}-> {autoCrispen});
+   $w-> menu-> EditAutoStretching-> checked( $w-> {ini}-> {autoStretch});
    $w-> reset_mark_state;
 }
 
@@ -108,6 +123,7 @@ sub load_info
    $file =~ s/\d{$cpm}(\.pls)$/$1/;
    $w-> {info} = {};
    my $info = $w-> {info};
+   $w-> {totalCells} = $w-> {totalProcesses} = $w-> {totalLength} = $w-> {totalBranches} = 0;
    return unless open INFO, $file;
    my ($totalCells,$totalProcesses,$totalBranches,$totalLength) = (0,0,0,0);
    my ( $smin, $smax) = $w-> win_getseriesrange;
@@ -292,7 +308,7 @@ sub save_info
    }
    unless ( open INFO, ">$infoFile") {
       return 0 if Prima::MsgBox::message_box( $::application-> name,
-         "Error saving file $infoFile. Ignore changes?", mb::YesNo|mb::Warning) == mb::No;
+         "Error saving file $infoFile ($!). Ignore changes?", mb::YesNo|mb::Warning) == mb::No;
       return 1;
    }
    
@@ -455,6 +471,8 @@ sub win_newframe
    $w-> {branches} = [];
    $w-> modified(0);
    $w-> reset_mark_state; 
+   $w-> {mirrorImage} = undef;
+   $w-> {recWindow}-> RestoreBtn-> enabled( 0) if $w-> {recWindow};
 
    return unless defined $w-> {file};
 
@@ -501,12 +519,23 @@ sub win_framechanged
    $w-> SUPER::win_framechanged;
 
    my $tb = $w-> ToolBar;
-   my $i = defined $w-> {file};
+   my $i = $w-> IV-> image;
+   my $canApply = defined $i && $i-> type == im::Byte;
 
    $w-> menu-> FileStats-> enabled( $i);
+   $w-> menu-> EditProcess-> enabled( $canApply);   
+   $w-> menu-> EditProcessSeries-> enabled( $canApply);   
    $tb-> MarkCells-> enabled( $i);
    $tb-> MarkProcesses-> enabled( $i);
    $tb-> DrawProcesses-> enabled( $i);
+   if ( $w-> {recWindow}) {
+      my $r = $w-> {recWindow};
+      $r-> ApplyBtn-> enabled( $canApply);
+      $r-> RestoreBtn-> enabled( $canApply && defined $w-> {mirrorImage});
+      $r-> PD1-> enabled( $canApply);
+      $r-> PD2-> enabled( $canApply);
+      $r-> PD3-> enabled( $canApply);
+   }
    $w-> reset_mark_state;
    $w-> update_state;
 }
@@ -663,7 +692,7 @@ sub preprocess
 sub crispen_state_changed
 {
    my $w = $_[0];
-   $w-> {ini}-> {autoCrispen} = $w-> menu-> AutoCrispening-> toggle;
+   $w-> {ini}-> {autoCrispen} = $w-> menu-> EditAutoCrispening-> toggle;
    $w-> preprocess;
    $w-> IV-> repaint;
 }
@@ -671,10 +700,440 @@ sub crispen_state_changed
 sub stretching_state_changed
 {
    my $w = $_[0];
-   $w-> {ini}-> {autoStretch} = $w-> menu-> AutoStretching-> toggle;
+   $w-> {ini}-> {autoStretch} = $w-> menu-> EditAutoStretching-> toggle;
    $w-> preprocess();
    $w-> IV-> repaint;
 }
+
+sub win_entersubplace
+{
+   my $w = $_[0];
+   $w-> {savePointer} = $::application-> pointer;
+   $::application-> pointer( cr::Wait);
+   return defined $w-> {mirrorImage} ? $w-> {mirrorImage} : $w-> IV-> image;
+}
+
+sub win_leavesubplace
+{
+   my $w = $_[0];
+   $::application-> pointer( $w-> {savePointer});
+   $w-> {mirrorImage} = $w-> IV-> image unless defined $w-> {mirrorImage};
+   $w-> IV-> image( $_[1]);
+   $w-> {recWindow}-> RestoreBtn-> enabled( 1) if $w-> {recWindow};
+   $w-> {savePointer} = undef;
+   $w-> sb_text('Done');
+}
+
+sub win_restore
+{
+   my ( $w, $i) = @_;
+   $w-> IV-> repaint, return unless defined $w-> {mirrorImage};
+   $w-> IV-> image($w-> {mirrorImage});
+   $w-> {mirrorImage} = undef;
+   $w-> {recWindow}-> RestoreBtn-> enabled( 0) if $w-> {recWindow};
+}
+
+
+sub process
+{
+   my $w = $_[0];
+   my $mode = $_[2] || 0;
+   $w-> win_rec_updatevalues;
+   my $orgi = $w-> win_entersubplace;
+
+   my ( $minUF, $maxUF, $stepUF, $min_area, $min_rank, $max_index, $min_index, $dilate, $erode, $rad) = 
+      map { $w-> {ini}-> {$_}} qw(
+        C_minUF C_maxUF C_stepUF C_min_area C_min_rank C_max_index C_min_index C_dilations C_erosions C_cell_radius
+   );
+
+   my $i = $orgi-> dup;
+   my $dd = $dilate;
+   $i = IPA::Morphology::dilate( $i) while $dd--;
+   return $w-> win_leavesubplace( $i) if $mode == 1;
+
+   my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 2 * 3));
+   $pct -= $step;
+
+   # union find
+   my @mp = map { 
+      my $st = $_;
+      #$w-> sb_text( sprintf( "Union find: %d%%", ($st - $minUF)*100/($maxUF-$minUF)));
+      $w-> sb_text( sprintf( "%d%% ( union find )", $pct += $step));
+      $_ = IPA::Local::unionFind( $i, method => 'ave', threshold => $st * $stepUF); 
+   } $minUF .. $maxUF;
+
+   # contour find
+   my $num = 0;
+   my $sz = $i-> width * $i-> height;
+   my @co;
+   my $contnum = 0;
+   for ( @mp) {
+      $num++;
+      $w-> sb_text( sprintf( "%d%% ( contour find )", $pct += $step));
+      my $img = $_;
+      my @hist = IPA::Misc::histogram( $_);
+      my @srt_hist = sort { $b <=> $a } @hist;
+      my $max_bkg  = $srt_hist[0] * 0.8;
+
+      my $cou = {};
+      my $j;
+
+      my @map = map { ($hist[$_] > $max_bkg) ? 0 : 255} (0..255);
+      $map[0] = 255 if $hist[0] < $max_bkg; # if 0 is valid
+#     for ( 0..255) {
+#        $map[$_] = ( $_ < $min_index || $_ > $max_index) ? 0 : $map[$_];
+#     }
+      $img = IPA::Point::remap( $img, lookup => \@map);
+      $img = IPA::Global::fill_holes( $img);
+      $img = IPA::Global::area_filter( $img, minArea => $min_area, maxArea => $sz);
+      $cou = [map { IPA::Region::contour2region($_)} @{IPA::Global::identify_contours( $img, edgeSize => 1)}];
+      push @co, $cou;
+   }
+
+   
+   # Contour link
+
+   my $l;
+   my @kgraph;
+   for ( $l = 0; $l < @co - 1; $l++) { # frame cycle
+      $w-> sb_text( sprintf( "%d%% ( contour link )", $pct += $step ));
+      my ( $co1, $co2) = ( $co[$l], $co[$l+1]);
+      my @klayer = ();
+      my $src_contour = $co1;
+      my $kid = -1;
+      for ( @$src_contour) {
+         my $k;
+         my ( $min_diff, $best_contour, $best_outline, $src)  = ( 1_000_000_000, undef, undef, $_);
+         my $kid2 = -1;
+         for ( @$co2) {
+            $kid2++;
+            my $cnt_diff = IPA::Region::combine( $src, $_, 'and');
+            $cnt_diff = $cnt_diff->[2] ? $cnt_diff->[2] : 1_000_000_001; # hacky interconnection ratio
+            next if $cnt_diff > $min_diff;
+            $min_diff = $cnt_diff;
+            $best_contour = $kid2;
+            $best_outline = $_;
+         }
+         $kid++;
+         next unless defined $best_outline;
+         push @klayer, {
+            id   => [ $kid, $best_contour], # used as unique ID for matching
+            out  => [ $src, $best_outline], # just outlines
+            rank => 0,  # chain length,
+            top  => 1,  # if the link is a tree top?
+            branches => [],
+         };
+      }
+      push @kgraph, \@klayer;
+   }
+   
+   
+#  $w-> sb_text( "Line up contours");
+   $w-> sb_text( sprintf( "%d%% ( line up contours )", $pct += $step));
+   for ( $l = @kgraph - 2; $l >= 0; $l--) { # layer cycle from top to bottom
+      for ( @{$kgraph[ $l]}) { # every contour hash in the layer
+         my $src_cont = $_;
+         for ( @{$kgraph[ $l + 1]}) { # match to upper every at the upper layer
+            my $dst_cont = $_;
+            my $r = $src_cont->{rank} + 1;
+            if ( $src_cont->{id }->[$r] == $dst_cont->{id }->[0]) {
+                 my ( $i, $j) = ( 1, $r + 1);
+                 for ( ; $j <= $r + 1 + $dst_cont->{rank}; $j++, $i++) { # for every uplink
+                    $src_cont->{id }->[$j] = $dst_cont->{id} ->[$i];
+                    $src_cont->{rank}++;
+                 }
+                 $src_cont->{top} = 0;
+                 $src_cont->{uplink} = $dst_cont;
+                 push @{$dst_cont->{branches}}, $src_cont;
+                 last;
+            }
+         }
+      }
+   }
+   
+   # $w-> sb_text( "Finalizing output...");
+   $w-> sb_text( sprintf( "%d%% ( bulk mask )", $pct += $step));
+   my $kk; 
+   $kk = Prima::Image-> create( width => $i-> width, height => $i-> height, type => im::BW);
+   $kk-> begin_paint;
+   $kk-> backColor( 0);
+   $kk-> clear;
+   $kk-> color( cl::White);
+   for ( map { @$_} @kgraph) {
+      my $x = $_;
+      next if !$x->{top};
+      my $rank = $x-> {rank};
+      my @z = @{$x->{branches}};
+      while ( scalar @z) {
+         @z = map {@{$_->{branches}}} @z;
+         $rank++;
+      }
+      next if $rank < $min_rank;
+      my ( $clx, $a1, $a2, $a3) = ( 0, 0, 0, 0);
+      for ( @{$x->{out}}) {
+         IPA::Region::plot( $kk, $_);
+         $a1++;
+      }
+      @z = @{$x->{branches}};
+      while ( scalar @z) {
+         for ( @z) {
+            $a3++;
+            for ( @{$_->{out}} ) {
+               IPA::Region::plot( $kk, $_);
+               $a2++;
+            }
+         }
+         @z = map {@{$_->{branches}}} @z;
+      }
+      $l++;
+   }
+
+   $kk-> end_paint;
+   $kk-> type( im::Byte);
+   $w-> sb_text( sprintf( "%d%% ( filter mask )", $pct += $step));
+   $kk = IPA::Global::fill_holes( $kk);
+   $dd = $dilate;
+   $kk = IPA::Morphology::erode( $kk) while $dd--;
+   $kk = IPA::Global::area_filter( $kk, minArea => $min_area, maxArea => $sz);
+   return $w-> win_leavesubplace( $kk) if $mode == 2;
+   $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
+
+   sub weigh_center
+   {
+      my $c = $_[0];
+      my @a = ([], []);
+      my $flip = 0;
+      for ( @$c) {
+         push @{$a[$flip]}, $_;
+         $flip = $flip ? 0 : 1;
+      }
+      @{$a[0]} = sort { $a <=> $b } @{$a[0]};
+      @{$a[1]} = sort { $a <=> $b } @{$a[1]};
+      return ( $a[0]->[scalar(@{$a[0]})/2], $a[1]->[scalar(@{$a[1]})/2]);
+   }
+
+   # the contours are up - finding 'centroids' and doing stereology
+   my $conto = IPA::Global::identify_contours( $kk);
+   my $mask  = $kk-> dup;
+   my @centroids;
+   my @processes;
+   my @excl = map { int( $_ - $_ / 20) } $kk-> size;
+
+   sub excluded  # find if a contour touches the exclusion borders
+   {
+      my $flip = 0;
+      my @excl = @_[1,2];
+      for ( @{$_[0]}) {
+         return 1 if $_ >= $excl[ $flip];
+         $flip = $flip ? 0 : 1;
+      }
+      return 0;
+   }
+
+   if ( $mode == 3) {
+      $kk-> begin_paint;
+      $kk-> color(0);
+      $kk-> bar( 0, 0, $kk-> size);
+      $kk-> rop( rop::OrPut);
+   }
+
+   my ( $ww, $hh) = $mask-> size;
+   my $ls = int(( $ww * 8 + 31) / 32) * 4;
+   my $dy = int($hh / 20);
+   my $szy = int(($hh - 2 * $dy) / $w-> {ini}-> {nLines});
+   
+   for ( @$conto) {
+      next if excluded( $_, @excl);
+   
+      $mask-> begin_paint;
+      $mask-> set( color => cl::White, backColor => cl::Black);
+      $mask-> clear;
+      $mask-> fillpoly( $_);
+      $mask-> end_paint;
+
+      $mask-> type( im::Byte);
+      $dd = $erode;
+      $mask = IPA::Morphology::erode( $mask) while $dd--;
+     
+      my $z = IPA::Point::mask( $mask, test => 255, match => $orgi, mismatch => 0);
+      my @h = IPA::Misc::histogram( $z);
+      my ( $i, $mean) = (0,0);
+      $mean += $i++ * $_ for @h;
+      $i = 0;
+      shift @h;
+      $i += $_ for @h;
+      $mean /= ( $i ? $i : 1);
+
+      my ( $x, $y) = weigh_center( $_);
+      if ( $mode == 3) {
+         $kk-> color(($mean < $min_index || $mean > $max_index) ? cl::LightRed : cl::LightGreen);
+         $kk-> put_image( 0,0,$mask);
+         $kk-> text_out( sprintf("%d", $mean), $x+5, $y+5);
+      }
+      
+      next if $mean < $min_index || $mean > $max_index;
+      push @centroids, "$x $y";
+
+      $mask = IPA::Morphology::thinning( $mask);
+      my $d = $mask-> data;
+      my $mm = 0;
+      for ( $i = 1; $i <= $w-> {ini}-> {nLines}; $i++) {
+         my $ay = $dy + $i * $szy;
+         unless ( $mm) {
+            $mm = 1, next if $ay > $y - $rad && $ay < $y + $rad;
+         }
+         my $scanline = substr( $d, $ls * $ay, $ww);
+         my $ax = 0;
+         my @localp;
+         $scanline =~ s/(?:(\0+)|(.))/push(@localp, $ax) if $2; $ax += length($1||$2); ' '/xeg;
+         my $prev = -$rad * 2;
+         push @processes, map {"$_ $ay"} grep {
+            my $yes = ( $prev + $rad < $_);
+            $prev = $_;
+            $yes;
+         } grep { 
+            $mm ? 1 : ( $mm = 1, $_ <= $x - $rad || $_ >= $x + $rad )
+         } @localp;
+      }
+   }
+
+   if ( $mode == 3) {
+      $kk-> end_paint;
+      $w-> win_leavesubplace( $kk);
+      return;
+   }
+
+   $w-> {totalCells} -= $w-> {nCells};
+   $w-> {cells}  = \@centroids;
+   $w-> {nCells} = scalar( @centroids);
+   $w-> {totalProcesses} -= $w-> {nProcesses};
+   $w-> {processes} = \@processes;
+   $w-> {nProcesses} = scalar( @processes);
+   
+
+   $w-> IV-> repaint;
+   $w-> modified(1);
+   $w-> update_state;
+   $::application-> pointer( $w-> {savePointer});
+   $w-> {savePointer} = undef;
+}
+
+sub process_series
+{
+   my $w = $_[0];
+   Prima::MsgBox::message( "No series to process"), return if ( !defined $w-> {nextFile} && !defined $w-> {prevFile});
+   my $num = $w-> {cypherMask};
+   my ( $fn, $tn) = $w-> win_getseriesrange;
+   return if Prima::MsgBox::message( "This will process series ".
+      $w-> {fileBeg}.('X' x $num).$w-> {fileEnd}." [$fn-$tn] . Proceed?",
+      mb::OKCancel|mb::Information) != mb::OK;
+   my $fnsave = $w->{fileNum};
+   my $f;   
+   my $ok = 1;
+   $w->{packetAborted} = 0;
+
+   my $userAborted = 0;
+   my $statwin = $w-> insert( Dialog =>
+      centered    => 1,
+      text        => 'Processing',
+      size        => [ 300, 60],
+      onKeyDown   => sub {
+         my ( $self, $code, $key, $mod) = @_;
+         if ( $key == kb::Esc &&
+            ( Prima::MsgBox::message("Abort process?", mb::OKCancel|mb::Warning) == mb::OK)) {
+            $userAborted = 1;
+            $_[0]-> text('Cancelling');
+         }
+      },
+      onClose     => sub {
+         $_[0]-> clear_event;
+         return if Prima::MsgBox::message("Abort process?", mb::OKCancel|mb::Warning) != mb::OK;
+         $userAborted = 1;
+         $_[0]-> text('Cancelling');
+      },
+   );
+
+   my $g = $statwin-> insert( Gauge =>
+      origin => [ 5, 5],
+      size   => [ $statwin-> width - 10, $statwin-> height - 10],
+      min    => $fn,
+      max    => $tn,
+      value  => $fn,
+      font   => {height => $statwin-> height - 16},
+   );
+   
+
+   $statwin-> execute_shared;
+   for my $i ( $fn..$tn) {
+       $f = sprintf( "%s%0${num}d%s",$w->{fileBeg}, $i, $w-> {fileEnd});
+       $::application-> yield;
+       $ok = 0, last, if $userAborted;
+       if ( !$w-> win_loadfile( $f) || $w->{packetAborted}) {
+          Prima::MsgBox::message("Aborted - error processing file $f", mb::OK|mb::Error);
+          $ok = 0;
+          last;
+       }
+       $w-> process('', 0);
+       $g-> value( $i);
+   }
+   $statwin-> destroy;
+   
+   if ( $ok) {
+      Prima::MsgBox::message("Queue processed", mb::OK|mb::Information);
+      $w->win_loadfile( sprintf( "%s%0${num}d%s",$w->{fileBeg}, $fnsave, $w-> {fileEnd}));
+   }
+}
+
+sub win_rec_updatevalues
+{
+   my $w = $_[0];
+   return unless $w-> {recWindow};
+   my ( $r, $i) = ( $w-> {recWindow}, $w-> {ini});
+   $i-> {C_minUF}     = $r-> UF-> From-> value;
+   $i-> {C_maxUF}     = $r-> UF-> To-> value;
+   $i-> {C_stepUF}    = $r-> UF-> Step-> value;
+   $i-> {C_min_index} = $r-> FLT-> Min-> value;
+   $i-> {C_max_index} = $r-> FLT-> Max-> value;
+   $i-> {C_min_area}  = $r-> Area-> value;
+   $i-> {C_dilations} = $r-> Dilations-> value;
+   $i-> {C_erosions}  = $r-> Erosions-> value;
+}
+
+sub win_showrec
+{
+  my $w = $_[0];
+  unless ( $w-> {recWindow}) {
+     my $fi = Prima::find_image( '', 'PLab::Prima::prlens.fm');
+     unless ( defined $fi) { Prima::message( "Cannot find resource: PLab::Prima::prlens.fm"); return }
+      eval { $w-> {recWindow} = { Prima::VB::VBLoader::AUTOFORM_CREATE( $fi,
+         Form1 => {
+            onClose => sub { 
+               $w-> win_rec_updatevalues;
+               $w-> {recWindow} = undef; 
+            },
+         },
+         ApplyBtn   => { onClick => sub { $w-> process('', 0)}},
+         PD1        => { onClick => sub { $w-> process('', 1)}},
+         PD2        => { onClick => sub { $w-> process('', 2)}},
+         PD3        => { onClick => sub { $w-> process('', 3)}},
+         RestoreBtn => { onClick => sub { $w-> win_restore; }},
+      )}-> {Form1}};
+     if ( $@) { Prima::message("Error in setup resource: $@"); return };
+     my ( $r, $i) = ( $w-> {recWindow}, $w-> {ini});
+     $r-> UF-> From-> value ($i-> {C_minUF}   ); 
+     $r-> UF-> To-> value   ( $i-> {C_maxUF}  );
+     $r-> UF-> Step-> value ($i-> {C_stepUF}  );
+     $r-> FLT-> Min-> value ($i-> {C_min_index});
+     $r-> FLT-> Max-> value ($i-> {C_max_index});
+     $r-> Area-> value      ( $i-> {C_min_area});
+     $r-> Dilations-> value ($i-> {C_dilations});
+     $r-> Erosions-> value  ( $i-> {C_erosions});
+     $w-> win_framechanged;
+  }
+  $w-> {recWindow}-> bring_to_front;
+  $w-> {recWindow}-> select;
+}
+
 
 sub IV_MouseDown
 {
@@ -997,12 +1456,15 @@ sub opt_keys
 {
    return {
       %{$_[0]-> SUPER::opt_keys()},
-      AutoCrispening => [ kb::Space,           'Automatically crispen the image'],
-      AutoStretching => [ km::Ctrl|kb::Space,  'Automatically stretch the image color spectrum'],
-      FileStats      => [ '@S',                'Invoke statistic data dialog'],
-      HelpAbout      => [ kb::NoKey,           'Standard about box'],
-      HelpPlabApps   => [ kb::NoKey,           'Online PlabApps overview'],
-      HelpContents   => [ kb::NoKey,           'Online PrLenS overview'],
+      EditAutoCrispening => [ kb::Space,           'Automatically crispen the image'],
+      EditAutoStretching => [ km::Ctrl|kb::Space,  'Automatically stretch the image color spectrum'],
+      EditProcess        => [ '^A',                'Markup processes automatically'],
+      EditProcessSeries  => [ kb::NoKey,           'Markup series of processeses automatically'],
+      EditRecSetup       => [ '@R',                'Display recognition setup dialog'],
+      FileStats          => [ '@S',                'Invoke statistic data dialog'],
+      HelpAbout          => [ kb::NoKey,           'Standard about box'],
+      HelpPlabApps       => [ kb::NoKey,           'Online PlabApps overview'],
+      HelpContents       => [ kb::NoKey,           'Online PrLenS overview'],
    },
 }
 
@@ -1181,7 +1643,6 @@ sub opt_proppop
 
 # OPT_END
 
-
 package Run;
 
 
@@ -1194,8 +1655,12 @@ splice( @{$$wfil[1]}, -1, 0,
 
 my $wedt = ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
-   [ AutoCrispening => "~Auto crispening" => q(crispen_state_changed) ],
-   [ AutoStretching => "Auto stretching"  => q(stretching_state_changed) ],
+   [ EditAutoCrispening => "~Auto crispening" => q(crispen_state_changed) ],
+   [ EditAutoStretching => "Auto stretching"  => q(stretching_state_changed) ],
+   [],
+   [ EditRecSetup => "Recognition ~setup"  => q(win_showrec), ],   
+   [ -EditProcess => "~Automatic recognition" => q(process)],
+   [ -EditProcessSeries => "Automatic ~series recognition" => q(process_series)],
    [],
 );
 
