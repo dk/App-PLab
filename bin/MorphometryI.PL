@@ -15,10 +15,10 @@ $::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
 
 package ocq;
 
-use constant Files      => 1;
-use constant Basics     => 2;
-use constant Histogram  => 4;
-use constant Equalize   => 8;
+use constant Files      => 0;
+use constant Basics     => 1;
+use constant Histogram  => 2;
+use constant Equalize   => 3;
 
 package MorphoWindow;
 use vars qw(@ISA);
