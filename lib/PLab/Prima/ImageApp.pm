@@ -270,13 +270,13 @@ sub dlg_okcancel
       text   => '~Ok',
       name   => 'OK',
       default => 1,
-      modalResult => cm::Ok,
+      modalResult => mb::Ok,
    );
    $self-> insert( Button =>
       origin => [ 116, 20],
       size   => [ 96, 36],
       text   => 'Cancel',
-      modalResult => cm::Cancel,
+      modalResult => mb::Cancel,
    );
 }
 
@@ -941,7 +941,7 @@ sub opt_propcreate
          my $d = defined $w->{dirpt} ? $w->{dirpt} : Prima::ChDirDialog-> create;
          $w->{dirpt} = $d;
          $d-> directory( $_[0]-> owner-> Path-> text);
-         if ( $d-> execute != cm::Cancel) {
+         if ( $d-> execute != mb::Cancel) {
             $_[0]-> owner-> UseDef-> uncheck;
             $_[0]-> owner-> Path-> enabled(1);
             $_[0]-> owner-> Path-> text( $d-> directory);
@@ -1234,7 +1234,7 @@ sub opt_properties
 
    $w-> opt_proppush( $dlg, $nb, $nbpages);
    $w-> iv_cancelmode( $w-> IV);
-   $w-> opt_proppop( $dlg, $nb, $nbpages, $dlg-> execute == cm::OK);
+   $w-> opt_proppop( $dlg, $nb, $nbpages, $dlg-> execute == mb::OK);
 }
 
 # OPT_END

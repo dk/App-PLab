@@ -785,7 +785,7 @@ sub fig_propdialog
           size   => [ 56, 36],
           default => 1,
           text    => '~Ok',
-          modalResult => cm::OK,
+          modalResult => mb::OK,
        );
        $d-> insert( Label =>
           origin => [ 85, 10],
@@ -865,7 +865,7 @@ sub fig_propdialog
    $d-> Threshold-> value( $me-> {threshold});
    $d-> Threshold-> notify(q(PostMessage)); # force changes
    $w-> iv_cancelmode( $w-> IV);
-   if ( $d-> execute == cm::OK) {
+   if ( $d-> execute == mb::OK) {
       $me-> {threshold} = $d-> Threshold-> value;
    }
    $pv-> image( undef);

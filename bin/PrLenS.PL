@@ -414,7 +414,7 @@ sub show_stats {
          text => '~Ok',
          origin => [ 10, 10],
          default => 1,
-         modalResult => cm::Ok,
+         modalResult => mb::Ok,
          onClick => sub {
             $_[ 0]->owner->close;
          },

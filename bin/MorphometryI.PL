@@ -1374,7 +1374,7 @@ sub opt_calcdlg
       $w-> dlg_okcancel( $d);
       $w->{CalcOptDialog} = $d;
    }
-   return if $d-> execute != cm::OK;
+   return if $d-> execute != mb::OK;
    return $w-> {ini}-> {CalcOptions} = $d-> CheckList-> vector;
 }
 
@@ -2049,7 +2049,7 @@ sub pt_undo3
          $w-> IV-> repaint;
       },
    );
-   if ( $d-> execute == cm::Cancel) {
+   if ( $d-> execute == mb::Cancel) {
       ${$w-> pt_lines_ptr()} = $lrSave;
    } else {
       if ( $w-> pt_lines) {
