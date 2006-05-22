@@ -839,11 +839,12 @@ sub fig_propdialog
              my $self = $_[0];
              my $v    = $self-> value;
              my $mask = IPA::Point::threshold(
-                      $i2, minvalue => 0, maxvalue => 256 - $v);
+                      $i2, minvalue => $v, maxvalue => 255
+             );
              my $a2 = IPA::Point::mask( $mask, mismatch => $i2);
              my $area  = $mask-> sum / 255;
-             my $sum2 = $mask->sum - $a2-> sum;
-             my $ave  = $area ? $sum2 / $area : 0;
+             my $sum2 = $a2-> sum;
+             my $ave  = int(($area ? $sum2 / $area : 0) * 1000) / 1000;
              $d-> Text-> text( "$v Area: $area, sum: $sum2, avebr: $ave");
              $d-> Text-> update_view;
              my $mode = $w->{ini}->{PropShowMode};
