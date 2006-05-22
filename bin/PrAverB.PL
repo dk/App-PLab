@@ -48,7 +48,7 @@ sub new
    $self-> {rect} = [@_];
    $self-> {bounds} = [ $self-> rect2boundary( @{$self-> {rect}})];
    $self-> {state} = 0;
-   $self-> {threshold} = 1;
+   $self-> {threshold} = 0;
    $self-> {rectLike} =
       ( scalar @_ == 8) &&
       ( $_[0] == $_[2]) &&
@@ -590,7 +590,7 @@ sub win_newextras
          # print "@dp:ok!\n";
          $i++;
          my $threshold = shift @dp;
-         next if $threshold < 1 || $threshold > 255;
+         next if $threshold < 0 || $threshold > 255;
          my $fig = $w-> fig_add( @dp);
          $fig-> {number} = $i;
          $fig-> {threshold} = $threshold;
@@ -682,10 +682,10 @@ SD
          $i++;
          my ( $i1, $imask, $i2) = $w-> fig_getspots( $_);
          my $t    = $_-> {threshold};
-         my $mask = IPA::Point::threshold( $i2, minvalue => 0, maxvalue => 256 - $t);
+         my $mask = IPA::Point::threshold( $i2, minvalue => $t, maxvalue => 255);
          my $a2   = IPA::Point::mask( $mask, mismatch => $i2);
          my $area  = $mask-> sum / 255;
-         my $sum2 = $mask->sum - $a2-> sum;
+         my $sum2 = $a2-> sum;
          my $ave  = $area ? $sum2 / $area : 0;
          printf F "%-3d %-14.8g %-14.8g %-14.8g", $i, $ave, $sum2, $area;
          print F "# $t @{$_->{rect}}\n";
@@ -829,7 +829,7 @@ sub fig_propdialog
           origin => [ 10, 56],
           size   => [ 380, 52],
           name   => 'Threshold',
-          min    => 1,
+          min    => 0,
           max    => 255,
           vertical => 0,
           increment => 50,
