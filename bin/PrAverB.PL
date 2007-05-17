@@ -473,15 +473,12 @@ sub on_paint
 
 sub compare_to
 {
-   my @b1 = @{ $_[0]->{bounds}};
-   my @b2 = @{ $_[1]->{bounds}};
-   if ( $b1[3] > $b2[3]) {
-      return -1;
-   } elsif ( $b1[3] < $b2[3]) {
-      return 1;
-   } else {
-      return $b2[0] <=> $b1[0];
-   }
+   my @d  = map {
+      my $g = $_[0]-> {bounds}-> [$_] - $_[1]-> {bounds}->[$_];
+      $g = 0 if abs($g) < 8; # XXX
+      $g;
+   } 0,1;
+   return ($d[1] != 0) ? -$d[1] : $d[0];
 }
 
 package AveWindow;
