@@ -24,6 +24,7 @@ use strict;
 use Prima;
 use Prima::Application name => "PrAverB";
 use PLab::Prima::ImageApp;
+use IPA;
 use IPA::Point;
 
 # $ImageApp::testing = 1;
