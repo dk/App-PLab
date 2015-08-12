@@ -1,10 +1,10 @@
 #!perl -w
-
 use strict;
+use warnings;
 use Prima;
 use Prima::Application name => "Morphometry I";
-use PLab::Prima::ImageApp;
-use PLab::Prima::Calibrations;
+use App::PLab::ImageApp;
+use App::PLab::Calibrations;
 use Prima::Edit;
 use Prima::ExtLists;
 use IPA::Local;
@@ -13,7 +13,7 @@ use IPA::Global;
 use IPA::Misc;
 use XML::Parser;
 
-$::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
+$::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));
 
 package ocq;
 
@@ -24,7 +24,7 @@ use constant Equalize   => 3;
 
 package MorphoWindow;
 use vars qw(@ISA);
-@ISA = qw(ImageAppWindow::Calibrations);
+@ISA = qw(App::PLab::Calibrations);
 
 sub make_contour_continuous
 {
@@ -2013,7 +2013,7 @@ sub pt_undo3
       width  => 300,
       height => 120,
       text   => 'Undo',
-      %ImageAppWindow::dlgProfile,
+      %App::PLab::ImageAppWindow::dlgProfile,
    );
    $w-> dlg_okcancel( $d);
    $d-> insert( ScrollBar =>
@@ -2143,8 +2143,8 @@ sub rpt_toggle
    my $found = undef;
    for ( $i = 0; $i < scalar @$w; $i+=2) {
       my ( $ax, $ay) = @$w[$i,$i+1];
-      $found = $i, last if abs( $ax - $x) < $ImageAppWindow::pointClickTolerance &&
-       abs( $ay - $y) < $ImageAppWindow::pointClickTolerance;
+      $found = $i, last if abs( $ax - $x) < $App::PLab::ImageAppWindow::pointClickTolerance &&
+       abs( $ay - $y) < $App::PLab::ImageAppWindow::pointClickTolerance;
    }
    defined $found ? splice( @$w, $i, 2) : push( @$w, $x, $y);
    return !defined $found;
@@ -2556,7 +2556,7 @@ sub cleanup
 
 package Run;
 
-my $wfil = ImageAppWindow::winmenu_file();
+my $wfil = App::PLab::ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -2, 0,
    [],
    [ EditImport      => "~Import contours" => q(win_importextras)],
@@ -2564,7 +2564,7 @@ splice( @{$$wfil[1]}, -2, 0,
    [ EditCalcStats   => "~Calculate statistics"  => q(opt_statistics)],
 );
 
-my $wedt = ImageAppWindow::winmenu_edit();
+my $wedt = App::PLab::ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
    [ '-Undo1' => "~Undo drawing" => "BkSp" => kb::Backspace , sub {},],
    [ '-Undo2' => "~Group undo" => "Alt+BkSp" => km::Alt|kb::Backspace , sub {},],
@@ -2597,7 +2597,7 @@ my $w = MorphoWindow-> create(
    menuItems => [
       $wfil,
       $wedt,
-      ImageAppWindow::winmenu_view(),
+      App::PLab::ImageAppWindow::winmenu_view(),
       [],["~Help" => [
          [ HelpAbout =>  "~About" => sub {Prima::MsgBox::message("PLab application series, Morphometry I, version 1.00", mb::OK|mb::Information)}],
          [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],

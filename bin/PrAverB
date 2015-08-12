@@ -2,14 +2,15 @@
 
 package MorphometryI;
 use strict;
+use warnings;
 use Prima;
 use Prima::Application name => "PrAverB";
-use PLab::Prima::ImageApp;
+use App::PLab::ImageApp;
 use IPA;
 use IPA::Point;
 
 # $ImageApp::testing = 1;
-$::application-> icon( ImageAppGlyphs::icon( bga::drawprocesses));
+$::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));
 
 package tran;
 
@@ -465,7 +466,7 @@ sub compare_to
 
 package AveWindow;
 use vars qw(@ISA);
-@ISA = qw(ImageAppWindow);
+@ISA = qw(App::PLab::ImageAppWindow);
 
 sub win_inidefaults
 {
@@ -777,7 +778,7 @@ sub fig_propdialog
                 ['3' => '~Mask'     => 'Ctrl+M' => '^M' =>$selpoint],
              ]],
           ],
-          %ImageAppWindow::dlgProfile,
+          %App::PLab::ImageAppWindow::dlgProfile,
        );
        $d-> menu-> check( $w->{ini}->{PropShowMode});
        $d-> insert( Button =>
@@ -1077,7 +1078,7 @@ sub opt_keys
 
 package Run;
 
-my $wfile = ImageAppWindow::winmenu_file();
+my $wfile = App::PLab::ImageAppWindow::winmenu_file();
 splice( @{$$wfile[1]}, 8, 0,
    [],
    ['-FileSave'  => "~Save"     => q(win_saveframe)],
@@ -1085,7 +1086,7 @@ splice( @{$$wfile[1]}, 8, 0,
 );
 
 
-my $wedt = ImageAppWindow::winmenu_edit();
+my $wedt = App::PLab::ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
    [ EditDuplicate => "~Duplicate"    => q(win_figdup)],
    [ EditDelete    => "De~lete"       => q(win_figdelete)],
@@ -1097,7 +1098,7 @@ my $w = AveWindow-> create(
    menuItems => [
       $wfile,
       $wedt,
-      ImageAppWindow::winmenu_view(),
+      App::PLab::ImageAppWindow::winmenu_view(),
    ],
 );
 

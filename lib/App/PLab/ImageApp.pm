@@ -1,4 +1,4 @@
-package ImageApp;
+package App::PLab::ImageApp;
 use vars qw($testing $VERSION);
 
 $VERSION = '1.00';
@@ -15,7 +15,7 @@ use PLab::Prima::ImageAppGlyphs;
 no Prima::StartupWindow;
 
 
-package SerOpenDialog;
+package App::PLab::SerOpenDialog;
 use vars qw(@ISA);
 @ISA = qw(Prima::ImageOpenDialog);
 
@@ -119,7 +119,7 @@ sub Files_MeasureItem
    $self-> clear_event;
 }
 
-package  Prima::TrDeviceBitmap;
+package  App::PLab::TrDeviceBitmap;
 use vars qw(@ISA);
 @ISA = qw(Prima::DeviceBitmap);
 
@@ -160,7 +160,7 @@ sub clipRect
    $self-> SUPER::clipRect( $trx, $try, $tax, $tay);
 }
 
-package MagnifyingGlassWidget;
+package App::PLab::MagnifyingGlassWidget;
 use vars qw(@ISA);
 @ISA = qw(Prima::Widget);
 
@@ -178,7 +178,7 @@ sub profile_default
 
 sub on_create
 {
-   $_[0]-> {canvas} = Prima::TrDeviceBitmap-> create(
+   $_[0]-> {canvas} = App::PLab::TrDeviceBitmap-> create(
       width  => 76,
       height => 50,
       backColor => $_[0]-> owner-> backColor,
@@ -192,7 +192,7 @@ sub on_paint
 }
 
 
-package TrImageViewer;
+package App::PLab::TrImageViewer;
 use vars qw(@ISA);
 @ISA = qw(Prima::ImageViewer);
 
@@ -231,7 +231,7 @@ sub point2screen
    return map { int } shift-> SUPER::point2screen( @_);
 }
 
-package ImageAppWindow;
+package App::PLab::ImageAppWindow;
 use vars qw(@ISA %dlgProfile $ico $pointClickTolerance);
 @ISA = qw(Prima::Window);
 $pointClickTolerance = 8;
@@ -607,7 +607,7 @@ sub win_openserfile
    my $dir = eval { Cwd::abs_path( $w-> {ini}-> {path})};
    $dir = '.' if $@;
    $dir = '' unless -d $dir;
-   my $d = $w->{fileserDlg} ? $w->{fileserDlg} : SerOpenDialog-> create(
+   my $d = $w->{fileserDlg} ? $w->{fileserDlg} : App::PLab::SerOpenDialog-> create(
       owner     => $w,
       directory => $dir,
       filter    => [
@@ -1408,7 +1408,7 @@ sub iv_magnify
 {
    my ( $w, $self) = @_;
    return if $w-> {magnify};
-   my $x = $self-> insert( 'MagnifyingGlassWidget' );
+   my $x = $self-> insert( 'App::PLab::MagnifyingGlassWidget' );
    $x-> focus;
    $w-> IV-> capture(1);
    $w-> {magnify} = $x;
@@ -1536,7 +1536,7 @@ sub init
    );
 
 
-   $w-> insert( TrImageViewer =>
+   $w-> insert( 'App::PLab::TrImageViewer' =>
       name     => "IV",
       rect     => [ 2, $w-> StatusBar-> height + 2, $x - 2, $y - $w-> ToolBar-> height - 8],
       hScroll  => 1,

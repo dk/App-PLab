@@ -1,12 +1,13 @@
 #!perl -w
 
 use strict;
+use warnings;
 use Prima;
 use Prima::Application name => "PrLenS";
 use Prima::Edit;
 use Prima::ExtLists;
-use PLab::Prima::ImageApp;
-use PLab::Prima::Calibrations;
+use App::PLab::ImageApp;
+use App::PLab::Calibrations;
 use IPA::Local;
 use IPA::Misc;
 use IPA::Point;
@@ -16,12 +17,12 @@ use IPA::Region;
 use Prima::VB::VBLoader;
 use XML::Parser;
 
-$::application-> icon( ImageAppGlyphs::icon( bga::processes));
+$::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::processes));
 
 
 package LenWindow;
 use vars qw(@ISA);
-@ISA = qw(ImageAppWindow::Calibrations);
+@ISA = qw(App::PLab::Calibrations);
 
 use constant MAXDATASET => 5;
 
@@ -1359,8 +1360,8 @@ sub win_showrec
 {
   my $w = $_[0];
   unless ( $w-> {recWindow}) {
-     my $fi = Prima::Utils::find_image( '', 'PLab::Prima::prlens.fm');
-     unless ( defined $fi) { Prima::message( "Cannot find resource: PLab::Prima::prlens.fm"); return }
+     my $fi = Prima::Utils::find_image( '', 'App::PLab::prlens.fm');
+     unless ( defined $fi) { Prima::message( "Cannot find resource: App::PLab::prlens.fm"); return }
       eval { $w-> {recWindow} = { Prima::VB::VBLoader::AUTOFORM_CREATE( $fi,
          Form1 => {
             onClose => sub { 
@@ -1960,7 +1961,7 @@ sub opt_proppop
 package Run;
 
 
-my $wfil = ImageAppWindow::winmenu_file();
+my $wfil = App::PLab::ImageAppWindow::winmenu_file();
 splice( @{$$wfil[1]}, -1, 0,
    [ '-FileStats'  => "~Statistics"   => q(show_stats)],
    [ '-FileBackup' => "~Backup results" => q(file_backup)],
@@ -1968,7 +1969,7 @@ splice( @{$$wfil[1]}, -1, 0,
    
 );
 
-my $wedt = ImageAppWindow::winmenu_edit();
+my $wedt = App::PLab::ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
    [ EditAutoCrispening => "~Auto crispening" => q(crispen_state_changed) ],
    [ EditAutoStretching => "Auto stretching"  => q(stretching_state_changed) ],
@@ -1984,7 +1985,7 @@ my $w = LenWindow-> create(
    menuItems => [
       $wfil,
       $wedt,
-      ImageAppWindow::winmenu_view(),
+      App::PLab::ImageAppWindow::winmenu_view(),
       [],["~Help" => [
          [ HelpAbout =>  "~About" => sub {Prima::MsgBox::message("PLab application series, Process Lengths, version 2.00", mb::OK|mb::Information)}],
          [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],

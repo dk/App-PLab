@@ -2,8 +2,8 @@
 
 use strict;
 
-my $pkgname = 'Prima::Contrib::ButtonGlyphs';
-my $gifname = 'Prima::Contrib::ButtonGlyphs.gif';
+my $pkgname = 'App::PLab::ButtonGlyphs';
+my $gifname = 'App::PLab::ButtonGlyphs.gif';
 my $conname = 'bg';
 my $gifnameused = 0;
 my $zoom = 1;
@@ -17,7 +17,7 @@ for ( $i = 0; $i < @ARGV; $i++) {
 format: select_glyph options
 
 options:
-   -p package name          - default is Prima::Contrib::ButtonGlyphs
+   -p package name          - default is App::PLab::ButtonGlyphs
    -l image library name    - default is package_name.gif
    -c constant package name - default is 'bg'
    -z zoom                  - default is 1

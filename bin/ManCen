@@ -1,16 +1,18 @@
 #!perl -w
 
 package ManCen;
+use strict;
+use warnings;
 use Prima;
 use Prima::Application name => "ManCen";
-use PLab::Prima::ImageApp;
-use PLab::Prima::Calibrations;
+use App::PLab::ImageApp;
+use App::PLab::Calibrations;
 
-$::application-> icon( ImageAppGlyphs::icon( bga::cells));
+$::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::cells));
 
 package CenWindow;
 use vars qw(@ISA);
-@ISA = qw(ImageAppWindow::Calibrations);
+@ISA = qw(App::PLab::Calibrations);
 
 # WIN
 
@@ -682,8 +684,8 @@ sub rpt_is
    my $found = undef;
    for ( $i = 0; $i < scalar @$w; $i+=2) {
       my ( $ax, $ay) = @$w[$i,$i+1];
-      $found = $i, last if ( abs( $ax - $x) < $ImageAppWindow::pointClickTolerance) &&
-         ( abs( $ay - $y) < $ImageAppWindow::pointClickTolerance);
+      $found = $i, last if ( abs( $ax - $x) < $App::PLab::ImageAppWindow::pointClickTolerance) &&
+         ( abs( $ay - $y) < $App::PLab::ImageAppWindow::pointClickTolerance);
    }
    return $found;
 }
@@ -862,7 +864,7 @@ sub IV_Paint
 
 package Run;
 
-my $wedt = ImageAppWindow::winmenu_edit();
+my $wedt = App::PLab::ImageAppWindow::winmenu_edit();
 splice( @{$$wedt[2]}, 0, 0,
    [ EditClearPoints => "Clear all ~points"    => sub { 
       $_[0]-> rpt_clear; 
@@ -882,9 +884,9 @@ splice( @{$$wedt[2]}, 0, 0,
 
 my $w = CenWindow-> create(
    menuItems => [
-      ImageAppWindow::winmenu_file(),
+      App::PLab::ImageAppWindow::winmenu_file(),
       $wedt,
-      ImageAppWindow::winmenu_view(),
+      App::PLab::ImageAppWindow::winmenu_view(),
       [],[ "~Help" => [
          [ HelpAbout    => "~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
          [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],

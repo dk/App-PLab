@@ -1,6 +1,6 @@
-package ImageAppWindow::Calibrations;
+package App::PLab::Calibrations;
 use vars qw(@ISA);
-@ISA = qw(ImageAppWindow);
+@ISA = qw(App::PLab::ImageAppWindow);
 
 
 sub win_inidefaults
