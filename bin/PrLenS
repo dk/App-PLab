@@ -1986,7 +1986,6 @@ my $w = LenWindow-> create(
       [],["~Help" => [
          [ HelpAbout =>  "~About" => sub {Prima::MsgBox::message("PLab application series, Process Lengths, version 2.00", mb::OK|mb::Information)}],
          [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],
-         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("PrLens.html"); }],
       ]],
    ],
 );

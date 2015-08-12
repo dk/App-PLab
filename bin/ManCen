@@ -890,7 +890,7 @@ my $w = CenWindow-> create(
       [],[ "~Help" => [
          [ HelpAbout    => "~About" => sub {Prima::MsgBox::message("PLab application series, ManCen, version 1.00", mb::OK|mb::Information)}],
          [ HelpPlabApps => "~PLab Apps" => sub { $_[0]-> open_help(); }],
-         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("ManCen.html"); }],
+         [ HelpContents => "~Contents" => sub { $_[0]-> open_help("ManCen.pod"); }],
       ]],
    ],
 );

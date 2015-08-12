@@ -316,23 +316,8 @@ sub dlg_file
 sub open_help
 {       
    my ( $self, $address) = @_;
-   $address = 'index.html' unless defined $address;
-   $address = "http://www.plab.ku.dk/doc/PLabApps/$address" unless $address =~ /^(http)|(ftp)|(file)/i;
-   if ( Prima::Application-> get_system_info->{apc} == apc::Win32) {
-      open FWKERJFHWEKRFH, "|start $address";
-      close FWKERJFHWEKRFH if 0;
-   } else {
-      my $pg = $::application-> sys_action('browser');
-      Prima::MsgBox::message("No browsing facilities found. \nPlease point your browser to \n$address", 
-          mb::OK|mb::Warning), return unless $pg;
-      my $f = fork;
-      if ( $f < 0) {
-         Prima::MsgBox::message("Cannot fork."); 
-      } elsif ( $f == 0) {
-         exec("$pg $address");
-         die "Cannot execute $pg:$!";
-      }   
-   }   
+   $address = 'index.pod' unless defined $address;
+   $::application->open_help($address);
 }   
 
 # WIN

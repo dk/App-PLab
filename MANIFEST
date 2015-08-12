@@ -11,11 +11,11 @@ bin/MorphometryI
 bin/PrLenS
 bin/PrAverB
 bin/select_button_glyph
-html/bigview.gif
-html/mIc1.gif
-html/mIc2.gif
-html/index.html
-html/ManCen.html
-html/MorphometryI.html
+pod/bigview.gif
+pod/mIc1.gif
+pod/mIc2.gif
+pod/index.pod
+pod/ManCen.pod
+pod/MorphometryI.pod
 MANIFEST
 Makefile.PL
