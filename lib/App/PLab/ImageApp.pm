@@ -14,7 +14,6 @@ use App::PLab::ButtonGlyphs;
 use App::PLab::ImageAppGlyphs;
 no Prima::StartupWindow;
 
-
 package App::PLab::SerOpenDialog;
 use vars qw(@ISA);
 @ISA = qw(Prima::ImageOpenDialog);
