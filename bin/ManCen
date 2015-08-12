@@ -67,8 +67,8 @@ sub valid_comm_series
       # XXX print "i=$i, xp=$xp, yp=$yp\n";
       # for each cell in current frame
       for ( $k = 0; $k < $n; $k++) {
-         ( $x, $y) = ( $pts->[ $k * 2] * $mx, $pts-> [ $k * 2 + 1] * $my);
-         $d2 = ( $x - $xp) * ( $x - $xp) + ( $y - $yp) * ( $y - $yp);
+         my ( $x, $y) = ( $pts->[ $k * 2] * $mx, $pts-> [ $k * 2 + 1] * $my);
+         my $d2 = ( $x - $xp) * ( $x - $xp) + ( $y - $yp) * ( $y - $yp);
          $minD2 = $d2, $minK = $k if $d2 < $minD2;
          # XXX print "k=$k, x=$x, y=$y, d2=$d2, minD2=$minD2, minK=$minK\n";
       }
@@ -87,12 +87,12 @@ sub valid_comm_series
    for ( $k = 0; $k < $n; $k++) {
       my $minD2 = 1.0E20;
       my $minI = $n;
-      ( $x, $y) = ( $pts->[ $k * 2] * $mx, $pts-> [ $k * 2 + 1] * $my);
+      my ( $x, $y) = ( $pts->[ $k * 2] * $mx, $pts-> [ $k * 2 + 1] * $my);
 
       # for each cell in a previous frame
       for ( $i = 0; $i < $n; $i++) {
          my ( $xp, $yp) = ( $exp->[ $i * 2] * $mx, $exp-> [ $i * 2 + 1] * $my);
-         $d2 = ( $x - $xp) * ( $x - $xp) + ( $y - $yp) * ( $y - $yp);
+         my $d2 = ( $x - $xp) * ( $x - $xp) + ( $y - $yp) * ( $y - $yp);
          $minD2 = $d2, $minI = $i if $d2 < $minD2;
       }
       return $k,$minI if $minI != $k;

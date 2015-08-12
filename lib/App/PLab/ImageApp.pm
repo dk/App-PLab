@@ -9,9 +9,9 @@ use Cwd qw(abs_path);
 
 use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
               IniFile Sliders Utils Notebooks ComboBox Buttons Label Outlines
-              ColorDialog Contrib::ButtonGlyphs KeySelector ImageDialog);
-use Prima::Contrib::ButtonGlyphs;
-use PLab::Prima::ImageAppGlyphs;
+              ColorDialog KeySelector ImageDialog);
+use App::PLab::ButtonGlyphs;
+use App::PLab::ImageAppGlyphs;
 no Prima::StartupWindow;
 
 
@@ -1482,7 +1482,7 @@ sub init
       origin    => [ 2, $y - 40],
       size      => [ $x - 4, 38],
       raise     => 1,
-      image     => ImageAppGlyphs::image( bga::tile_m),
+      image     => App::PLab::ImageAppGlyphs::image( bga::tile_m),
       growMode  => gm::GrowHiX | gm::GrowLoY,
    );
 
@@ -1499,7 +1499,7 @@ sub init
    $w-> ToolBar-> insert(
       [ SpeedButton =>
          origin    => [1, 1],
-         image     => Prima::Contrib::ButtonGlyphs::icon( bg::fldropen),
+         image     => App::PLab::ButtonGlyphs::icon( bg::fldropen),
          hint      => 'Open file',
          onClick   => sub { $w-> win_openfile; },
          %btn_profile,
@@ -1507,7 +1507,7 @@ sub init
       [ SpeedButton =>
          name    => "PrevImage",
          origin  => [42, 1],
-         image   => ImageAppGlyphs::icon( bga::prev),
+         image   => App::PLab::ImageAppGlyphs::icon( bga::prev),
          enabled => 0,
          hint    => 'Previous image',
          onClick => sub { $w-> win_prevfile; },
@@ -1516,7 +1516,7 @@ sub init
       [ SpeedButton =>
          name    => "NextImage",
          origin  => [78, 1],
-         image   => ImageAppGlyphs::icon( bga::next),
+         image   => App::PLab::ImageAppGlyphs::icon( bga::next),
          enabled => 0,
          hint    => 'Next image',
          onClick => sub { $w-> win_nextfile; },

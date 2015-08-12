@@ -511,7 +511,7 @@ sub on_create
    $w-> ToolBar-> insert(
       [ SpeedButton =>
          origin    => [ 114, 1],
-         image     => Prima::Contrib::ButtonGlyphs::icon( bg::floppy),
+         image     => App::PLab::ButtonGlyphs::icon( bg::floppy),
          hint      => 'Save file',
          enabled   => 0,
          name      => "FileSave",
@@ -520,7 +520,7 @@ sub on_create
       ],
       [ SpeedButton =>
          origin    => [ 150, 1],
-         image     => Prima::Contrib::ButtonGlyphs::icon( bg::print),
+         image     => App::PLab::ButtonGlyphs::icon( bg::print),
          hint      => 'Print',
          enabled   => 0,
          name      => "FilePrint",
@@ -1110,9 +1110,6 @@ $w-> select;
 
 $w-> win_extwarn;
 
-if ( $ImageApp::testing) {
-   $w-> win_loadfile( "C:/home/Contrib/ris5.gif");
-}
 
 run Prima;
 

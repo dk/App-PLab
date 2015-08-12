@@ -82,7 +82,7 @@ sub on_create
       [ SpeedButton =>
          name    => "MarkCells",
          origin  => [120, 1],
-         image   => ImageAppGlyphs::icon( bga::cells),
+         image   => App::PLab::ImageAppGlyphs::icon( bga::cells),
          onClick => sub { $w-> mark_cells },
          hint    => "Mark cells mode",
          %btn_profile,
@@ -90,7 +90,7 @@ sub on_create
       [ SpeedButton =>
          name    => "MarkProcesses",
          origin  => [160, 1],
-         image   => ImageAppGlyphs::icon( bga::processes),
+         image   => App::PLab::ImageAppGlyphs::icon( bga::processes),
          onClick => sub { $w-> mark_processes} , 
          hint    => "Mark processes mode",
          %btn_profile,
@@ -98,7 +98,7 @@ sub on_create
       [ SpeedButton =>
          name    => "DrawProcesses",
          origin  => [200, 1],
-         image   => ImageAppGlyphs::icon( bga::drawprocesses),
+         image   => App::PLab::ImageAppGlyphs::icon( bga::drawprocesses),
          onClick => sub { $w-> draw_processes} ,
          hint    => "Draw processes mode",
          %btn_profile,
