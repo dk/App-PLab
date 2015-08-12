@@ -12,7 +12,6 @@ WriteMakefile(
 	IPA           => 0,
 	'XML::Parser' => 0,
     },
-    DISTNAME     => 'App::PLab',
     ABSTRACT     => 'Internal PLab image processing tools',
     AUTHOR       => 'Dmitry Karasik <dk@plab.ku.dk>, Anton Berezin <tobez@plab.ku.dk>, Vadim Belman <voland@plab.ku.dk>',
 );
