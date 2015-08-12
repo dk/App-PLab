@@ -991,8 +991,8 @@ sub opt_propcreate
    );
 
    my $optColors  = $w-> opt_colors;
-   my @colorNames = map { $optColors->{$_}->[1] } keys %$optColors;
-   my @colorKeys  = map { "Color_$_" } keys %$optColors; 
+   my @colorNames = map { $optColors->{$_}->[1] } sort keys %$optColors;
+   my @colorKeys  = map { "Color_$_" } sort keys %$optColors;
    if ( scalar keys %$optColors) {
       my $x1 = $nb-> insert_to_page( 1, ComboBox =>
          origin => [ 10, 10],
@@ -1018,9 +1018,10 @@ sub opt_propcreate
          origin => [ 190, 10],
          size   => [ 56, $nb-> font-> height + 2],
          onChange => sub {
-            unless ( $nbpages-> {deprecate}) {
+	    my $self = shift;
+            if ( !$nbpages-> {deprecate} && $self->enabled) {
                my $colors = $dlg-> {page2}-> {colors};
-               $$colors[ $nbpages-> NameSel-> focusedItem] = $_[0]-> value;
+               $$colors[ $nbpages-> NameSel-> focusedItem] = $self-> value;
                my $i;
                for ( $i = 0; $i < scalar @colorKeys; $i++) {
                   $w->{ini}->{$colorKeys[$i]} = $colors->[$i];
@@ -1145,7 +1146,7 @@ sub opt_proppush
 # Colors
    $nbpages-> ShowHint-> checked( $w-> {ini}-> {showHint});
    my $optColors = $w-> opt_colors;
-   my @colors    = map { $w-> {ini}->{"Color_$_"}} keys %$optColors;  
+   my @colors    = map { $w-> {ini}->{"Color_$_"}} sort keys %$optColors;
    $dlg-> {page2}-> {csave} =  { map { ( "Color_$_", $w-> {ini}->{"Color_$_"}) } keys %$optColors};
    $dlg-> {page2}-> {colors} = [ @colors ];
    if ( scalar @colors) {
