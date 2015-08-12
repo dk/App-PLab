@@ -70,11 +70,14 @@ my %grep_out = (
 
 my $x = <<SD;
 sub {
-   sort { \&{\$conname::{\$a}}() <=> \&{\$conname::{\$b}}()} grep { !exists \$grep_out{\$_}} keys \%conname::;
+   sort { \$conname::{\$a} <=> \$conname::{\$b}} 
+   grep { !exists \$grep_out{\$_}} 
+   keys \%conname::;
 }
 SD
 $x =~ s/conname/$conname/mge;
 my $grepsub = eval $x;
+
 my @inames = $grepsub->();
 
 for ( @images) {
