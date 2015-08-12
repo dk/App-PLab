@@ -176,18 +176,16 @@ sub xmlload
 
             # calibrations
             if ( $attrs{xcalib} != $w->{ ini}->{ XCalibration} ||
-                 $attrs{ycalib} != $w->{ ini}->{ YCalibration} ||
-                 $attrs{resolution} != $w->{ ini}->{ Resolution}) {
+                 $attrs{ycalib} != $w->{ ini}->{ YCalibration} ) {
                if ( Prima::MsgBox::message(
-                         "Image contains calibrations [$attrs{xcalib}:$attrs{ycalib}, $attrs{resolution} mkm] opposite to current [".
-                          $w->{ini}->{XCalibration}.':'.$w->{ini}->{YCalibration}.',' . $w->{ini}-> {Resolution}.' mkm]. '.
+                         "Image contains calibrations [$attrs{xcalib}:$attrs{ycalib}] opposite to current [".
+                          $w->{ini}->{XCalibration}.':'.$w->{ini}->{YCalibration}.']. '.
                           "Keep current settings?",
                           mb::YesNo|mb::Warning, { buttons => { mb::No , { text => '~Apply new'}}}) == mb::Yes) {
                   $w-> modified( 1);
                } else {
                   $w->{ini}->{XCalibration} = $attrs{xcalib};
                   $w->{ini}->{YCalibration} = $attrs{ycalib};
-                  $w->{ini}->{Resolution}   = $attrs{resolution};
                }
             }
 
@@ -512,7 +510,6 @@ $stats
   creationdate   = "$datestr"
   xcalib         = "$w->{ini}->{XCalibration}"
   ycalib         = "$w->{ini}->{YCalibration}"
-  resolution     = "$w->{ini}->{Resolution}"
   filemaskwidth  = "$w->{cypherMask}"
   lines          = "$w->{ini}->{nLines}"
   datasets       = "$sets"
@@ -586,7 +583,7 @@ sub generate_statistics_text {
    $npix = $npix ? ( $npix-> height - $inactive * 2) / $w-> {ini}-> {nLines}: 0;
    my ($fmin, $fmax) = $w-> win_getseriesrange;
    my $n = $fmax - $fmin + 1;
-   my $res = $w-> {ini}->{Resolution};
+   my $res = 1;
 
    my ( $fw, $pi2) = ( 10, 1.570796); # Field width
 
