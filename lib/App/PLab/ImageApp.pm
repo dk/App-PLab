@@ -316,8 +316,8 @@ sub dlg_file
 sub open_help
 {       
    my ( $self, $address) = @_;
-   $address = 'index.pod' unless defined $address;
-   $::application->open_help($address);
+   $address = 'index' unless defined $address;
+   $::application->open_help('App::PLab::' . $address);
 }   
 
 # WIN
@@ -1534,3 +1534,11 @@ sub init
 }
 
 1;
+
+=pod
+
+=head1 NAME
+
+App::PLab::ImageApp - ancient stuff, please move along, nothing to see here
+
+=cut

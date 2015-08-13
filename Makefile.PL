@@ -1,12 +1,18 @@
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
-my @programs_to_install = qw(ManCen MorphometryI PrLenS PrAverB select_button_glyph);
+
+sub ls($) 
+{
+	my $d = shift;
+	opendir D, $d or die $!;
+	map { "$d/$_" } grep { -f "$d/$_" } readdir D;
+}
 
 WriteMakefile(
     NAME	 => 'App::PLab',
     VERSION_FROM => 'lib/App/PLab/ImageApp.pm',
-    EXE_FILES    => [ map {("bin/$_")} @programs_to_install ],
+    EXE_FILES    => [ ls 'bin' ],
     PREREQ_PM    => {
     	Prima         => 0,
 	IPA           => 0,

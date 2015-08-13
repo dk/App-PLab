@@ -11,11 +11,11 @@ bin/MorphometryI
 bin/PrLenS
 bin/PrAverB
 bin/select_button_glyph
-pod/bigview.gif
-pod/mIc1.gif
-pod/mIc2.gif
-pod/index.pod
-pod/ManCen.pod
-pod/MorphometryI.pod
+lib/App/PLab/bigview.gif
+lib/App/PLab/mIc1.gif
+lib/App/PLab/mIc2.gif
+lib/App/PLab/index.pod
+lib/App/PLab/ManCen.pod
+lib/App/PLab/MorphometryI.pod
 MANIFEST
 Makefile.PL
