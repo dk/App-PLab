@@ -6,8 +6,7 @@ use warnings;
 use Prima;
 use Prima::Application name => "PrAverB";
 use App::PLab::ImageApp;
-use IPA;
-use IPA::Point;
+use IPA qw/Point/;
 
 # $ImageApp::testing = 1;
 $::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));

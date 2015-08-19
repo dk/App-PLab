@@ -11,7 +11,7 @@ sub ls($)
 
 WriteMakefile(
     NAME	 => 'App::PLab',
-    VERSION_FROM => 'lib/App/PLab/ImageApp.pm',
+    VERSION_FROM => 'lib/App/PLab.pm',
     EXE_FILES    => [ ls 'bin' ],
     PREREQ_PM    => {
     	Prima         => 0,

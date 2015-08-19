@@ -7,10 +7,7 @@ use App::PLab::ImageApp;
 use App::PLab::Calibrations;
 use Prima::Edit;
 use Prima::ExtLists;
-use IPA::Local;
-use IPA::Point;
-use IPA::Global;
-use IPA::Misc;
+use IPA qw/Local Point Global Misc/;
 use XML::Parser;
 
 $::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));

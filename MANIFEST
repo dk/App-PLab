@@ -11,6 +11,7 @@ bin/MorphometryI
 bin/PrLenS
 bin/PrAverB
 bin/select_button_glyph
+lib/App/PLab.pm
 lib/App/PLab/bigview.gif
 lib/App/PLab/mIc1.gif
 lib/App/PLab/mIc2.gif

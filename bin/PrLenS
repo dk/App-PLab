@@ -8,12 +8,7 @@ use Prima::Edit;
 use Prima::ExtLists;
 use App::PLab::ImageApp;
 use App::PLab::Calibrations;
-use IPA::Local;
-use IPA::Misc;
-use IPA::Point;
-use IPA::Global;
-use IPA::Morphology;
-use IPA::Region;
+use IPA qw/Local Misc Point GLobal Morphology Region/;
 use Prima::VB::VBLoader;
 use XML::Parser;
 
@@ -995,7 +990,16 @@ sub preprocess
    my $w = $_[0];
    return unless defined $w-> {file};
    my $self = $w-> IV;
-   $w-> {preprocessedImage} = $w-> {ini}-> {autoCrispen} ? IPA::Local::crispening( $self-> image) : undef;
+   if ($w-> {ini}-> {autoCrispen} ) {
+   	my $i = $self-> image;
+	unless ( $i-> type == im::Byte ) {
+		$i = $i->dup;
+		$i->type(im::Byte);
+	}
+   	$w-> {preprocessedImage} = IPA::Local::crispening( $i);
+   } else {
+   	$w-> {preprocessedImage} = undef;
+   }
    if ($w-> {ini}-> {autoStretch}) {
       my $i = $w-> {preprocessedImage} || $self-> image;
       $w-> {preprocessedImage} = $i-> dup;
