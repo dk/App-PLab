@@ -10,6 +10,7 @@ bin/ManCen
 bin/MorphometryI
 bin/PrLenS
 bin/PrAverB
+bin/morec2
 bin/select_button_glyph
 lib/App/PLab.pm
 lib/App/PLab/bigview.gif
