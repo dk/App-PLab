@@ -15,7 +15,7 @@ WriteMakefile(
     EXE_FILES    => [ ls 'bin' ],
     PREREQ_PM    => {
     	Prima         => 0,
-	IPA           => 0,
+	'Prima::IPA'  => 0,
 	'XML::Parser' => 0,
     },
     ABSTRACT     => 'Internal PLab image processing tools',

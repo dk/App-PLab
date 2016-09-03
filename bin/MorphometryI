@@ -7,7 +7,7 @@ use App::PLab::ImageApp;
 use App::PLab::Calibrations;
 use Prima::Edit;
 use Prima::ExtLists;
-use IPA qw/Local Point Global Misc/;
+use Prima::IPA qw/Local Point Global Misc/;
 use XML::Parser;
 
 $::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));
@@ -575,7 +575,7 @@ sub win_validate
       $i-> end_paint;
       $i-> type( im::Byte);
 
-      $i = IPA::Global::fill_holes( $i,
+      $i = Prima::IPA::Global::fill_holes( $i,
          edgeSize => $edge,
       );
 
@@ -591,19 +591,19 @@ sub win_validate
          $i-> end_paint;
          $i-> type( im::Byte);
 
-         $i = IPA::Global::fill_holes( $i,
+         $i = Prima::IPA::Global::fill_holes( $i,
             edgeSize => $edge,
          );
       }
 
-      $i = IPA::Global::area_filter( $i,
+      $i = Prima::IPA::Global::area_filter( $i,
          edgeSize => $edge,
          minArea  => $min,
          maxArea  => $max,
       );
 
       my $cc = [ grep { ($w->win_calcbasicparameters(@$_))[0] }
-                    @{IPA::Global::identify_contours( $i, edgeSize => $edge)} ];
+                    @{Prima::IPA::Global::identify_contours( $i, edgeSize => $edge)} ];
       $cc = undef unless scalar @$cc;
       $w-> {lineStorage}-> [ $j] = $cc;
       $w-> {lwStorage}-> [ $j] = defined $cc ? [ (1) x scalar @$cc] : undef;
@@ -657,26 +657,26 @@ sub win_applycontours
 
    $w-> win_objectsetsmenuaction( 0);
    $w-> pt_clear;
-   my $im = IPA::Local::unionFind(
+   my $im = Prima::IPA::Local::unionFind(
       $w-> win_entersubplace,
       method    => 'ave',
       threshold => $u);
 
-   $im = IPA::Point::threshold(
+   $im = Prima::IPA::Point::threshold(
       $im,
       minvalue => 0,
       maxvalue => $b);
 
-   $im = IPA::Global::fill_holes( $im,
+   $im = Prima::IPA::Global::fill_holes( $im,
       edgeSize => $e,
    );
-   $im = IPA::Global::area_filter( $im,
+   $im = Prima::IPA::Global::area_filter( $im,
       edgeSize => $e,
       minArea  => $mi,
       maxArea  => $ma,
    );
 
-   my $cc = IPA::Global::identify_contours( $im, edgeSize => $e);
+   my $cc = Prima::IPA::Global::identify_contours( $im, edgeSize => $e);
    ${$w-> pt_lines_ptr()} = $cc if scalar @$cc;
    ${$w-> pt_lw_ptr()}    = [ (1) x scalar @$cc] if scalar @$cc;
    $w-> pt_newset;
@@ -952,7 +952,7 @@ sub win_saveframe
       if ( $w->{ini}->{CalcBrightness} && $w->{ini}->{EqualBrightness}) {
          # subtracting low frequencies
          $w-> sb_text("Equalizing background ...");
-         my $i1 = IPA::Global::butterworth( $image, 
+         my $i1 = Prima::IPA::Global::butterworth( $image, 
             low        => 1,
             homomorph  => 0,
             power      => 2,
@@ -962,7 +962,7 @@ sub win_saveframe
             lowquality => 1,
          );
          $i1-> type( $image-> type);
-         $image = IPA::Point::subtract( $image, $i1);
+         $image = Prima::IPA::Point::subtract( $image, $i1);
          $w-> sb_text("saving $xmlname");
       }   
          
@@ -1035,10 +1035,10 @@ BODY
                 $img-> polyline( $pp);
                 $img-> end_paint;
                 $img-> type( im::Byte);
-                $img = IPA::Global::fill_holes( $img,
+                $img = Prima::IPA::Global::fill_holes( $img,
                    edgeSize => $w->{ini}->{EdgeSize},
                 );
-                $img = IPA::Global::area_filter( $img,
+                $img = Prima::IPA::Global::area_filter( $img,
                    edgeSize => $w->{ini}->{EdgeSize},
                    minArea  => $w->{ini}->{MinArea},
                    maxArea  => $w->{ini}->{MaxArea},
@@ -1054,7 +1054,7 @@ BODY
                    );
                    $sum = $img-> sum;
                    $sum2 = $img-> sum2;
-                   @pixarray = IPA::Misc::histogram( $img);
+                   @pixarray = Prima::IPA::Misc::histogram( $img);
                    $pixarray[0] -= $img-> width * $img-> height - $n;
                 }
                 $img-> destroy;
@@ -2471,7 +2471,7 @@ sub init
        hint    => 'Previews union find method',
        onClick => sub {
           $w-> win_leavesubplace(
-            IPA::Local::unionFind(
+            Prima::IPA::Local::unionFind(
                $w-> win_entersubplace,
                method    => 'ave',
                threshold => $self-> Union-> value));
@@ -2484,12 +2484,12 @@ sub init
        enabled => $canApply,
        hint    => 'Previews union find and threshold methods',
        onClick => sub {
-          my $im = IPA::Local::unionFind(
+          my $im = Prima::IPA::Local::unionFind(
              $w-> win_entersubplace,
              method    => 'ave',
              threshold => $self-> Union-> value);
           $w-> win_leavesubplace(
-             IPA::Point::threshold(
+             Prima::IPA::Point::threshold(
                 $im,
                 minvalue => 0,
                 maxvalue => $self-> Binary-> value,
@@ -2503,18 +2503,18 @@ sub init
        enabled => $canApply,
        hint    => 'Previews all methods',
        onClick => sub {
-          my $im = IPA::Local::unionFind(
+          my $im = Prima::IPA::Local::unionFind(
              $w-> win_entersubplace,
              method    => 'ave',
              threshold => $self-> Union-> value);
-          $im = IPA::Point::threshold(
+          $im = Prima::IPA::Point::threshold(
              $im,
              minvalue => 0,
              maxvalue => $self-> Binary-> value);
-          $im = IPA::Global::fill_holes( $im,
+          $im = Prima::IPA::Global::fill_holes( $im,
              edgeSize => $self-> Edge-> value,
           );
-          $im = IPA::Global::area_filter( $im,
+          $im = Prima::IPA::Global::area_filter( $im,
              edgeSize => $self-> Edge-> value,
              minArea  => $self-> Min-> value,
              maxArea  => $self-> Max-> value,

@@ -5,3 +5,5 @@ Revision history for Perl extension App::PLab.
 
 0.02  Aug 12 2015
         - some refreshments
+
+0.03  s/IPA/Prima::IPA/

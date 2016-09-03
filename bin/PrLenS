@@ -8,7 +8,7 @@ use Prima::Edit;
 use Prima::ExtLists;
 use App::PLab::ImageApp;
 use App::PLab::Calibrations;
-use IPA qw/Local Misc Point Global Morphology Region/;
+use Prima::IPA qw/Local Misc Point Global Morphology Region/;
 use Prima::VB::VBLoader;
 use XML::Parser;
 
@@ -996,7 +996,7 @@ sub preprocess
 		$i = $i->dup;
 		$i->type(im::Byte);
 	}
-   	$w-> {preprocessedImage} = IPA::Local::crispening( $i);
+   	$w-> {preprocessedImage} = Prima::IPA::Local::crispening( $i);
    } else {
    	$w-> {preprocessedImage} = undef;
    }
@@ -1097,20 +1097,20 @@ sub process
                                4, 4, 0, 0, 
                                $i-> width - 8, $i-> height - 8,
                                $i-> width - 8, $i-> height - 8, rop::Whiteness);
-   $i = IPA::Local::ridge( $i, scale => 16);
-   my $centers = IPA::Point::threshold( $i, minvalue => 1, true => 0, false => 255);
+   $i = Prima::IPA::Local::ridge( $i, scale => 16);
+   my $centers = Prima::IPA::Point::threshold( $i, minvalue => 1, true => 0, false => 255);
    $centers-> type(im::Byte);
-   $i = IPA::Point::threshold( $i, maxvalue => 255, preserve => 1, false => 255);
+   $i = Prima::IPA::Point::threshold( $i, maxvalue => 255, preserve => 1, false => 255);
    $i-> type( im::Byte);
-   $i = IPA::Local::hysteresis( $i, threshold => [ 20, 255]);
-   $i = IPA::Global::fill_holes( $i);
+   $i = Prima::IPA::Local::hysteresis( $i, threshold => [ 20, 255]);
+   $i = Prima::IPA::Global::fill_holes( $i);
    rop_put( $i, $rect, rop::AndPut);
-   $i = IPA::Global::area_filter( $i, minArea => $min_area);
-   $i = IPA::Morphology::dilate( $i);
-   $i = IPA::Global::fill_holes( $i);
-   $i = IPA::Morphology::erode( $i);
+   $i = Prima::IPA::Global::area_filter( $i, minArea => $min_area);
+   $i = Prima::IPA::Morphology::dilate( $i);
+   $i = Prima::IPA::Global::fill_holes( $i);
+   $i = Prima::IPA::Morphology::erode( $i);
    rop_put( $centers, $i, rop::AndPut);
-   $centers = IPA::Global::area_filter( $centers, minArea => 5);
+   $centers = Prima::IPA::Global::area_filter( $centers, minArea => 5);
    return $w-> win_leavesubplace( $i) if $mode == 1;
 
    my ( $pct, $step) = (0, 100 / (($maxUF - $minUF) * 3 + 8));
@@ -1126,41 +1126,41 @@ sub process
    # collect all characteristic radii
    my $scale = 0;
    while ( $rz-> sum) {
-      my $e = IPA::Morphology::erode( $rz, neighborhood => ((($scale++)%2)?4:8));
+      my $e = Prima::IPA::Morphology::erode( $rz, neighborhood => ((($scale++)%2)?4:8));
       if ( $scale < $rad * 2) {
          $rz = $e;
          next;
       }
       # collect all disappeared points
-      my $x = IPA::Morphology::reconstruct( $rz, $e);
+      my $x = Prima::IPA::Morphology::reconstruct( $rz, $e);
       rop_put( $x, $rz, rop::XorPut);
       rop_put( $z, $x, rop::OrPut);
       $rz = $e;
    }
    
-   for( @{IPA::Global::identify_contours( $i)}) {
+   for( @{Prima::IPA::Global::identify_contours( $i)}) {
        my $x = $i-> dup;   
        rop_put( $x, $x, rop::XorPut);
-       IPA::Region::plot( $x, IPA::Region::contour2region( $_), 0, 0, 255);
-       $x = IPA::Morphology::reconstruct( $z, $x);
+       Prima::IPA::Region::plot( $x, Prima::IPA::Region::contour2region( $_), 0, 0, 255);
+       $x = Prima::IPA::Morphology::reconstruct( $z, $x);
        #my $ma = $min_area;
        $scale = 0;
        my @objects;
        my @plot_regions;
        #print "new contour\n";
        while ( $x-> sum) {
-          $x = IPA::Morphology::dilate( $x, neighborhood => ((($scale++)%2)?4:8));
+          $x = Prima::IPA::Morphology::dilate( $x, neighborhood => ((($scale++)%2)?4:8));
           my $xz = $x-> dup;
           rop_put( $xz, $i, rop::NotSrcAnd);
           next unless $xz-> sum;
           # remove the overlapped objects
-          my $objects = IPA::Morphology::reconstruct( $x, $xz);
+          my $objects = Prima::IPA::Morphology::reconstruct( $x, $xz);
           rop_put( $x, $objects, rop::NotSrcAnd);
           # see if max circles are big enough
-          $objects = IPA::Global::area_filter( $objects, minArea => $min_area);
-          for( @{IPA::Global::identify_contours( $objects)}) {
-	     my $reg = IPA::Region::contour2region( $_);
-             my $area = IPA::Region::area( $reg);
+          $objects = Prima::IPA::Global::area_filter( $objects, minArea => $min_area);
+          for( @{Prima::IPA::Global::identify_contours( $objects)}) {
+	     my $reg = Prima::IPA::Region::contour2region( $_);
+             my $area = Prima::IPA::Region::area( $reg);
 	     push @objects, [ $area, $reg ];
 	  }
        }
@@ -1176,7 +1176,7 @@ sub process
 	  }
 	  # plot all filtered
 	  for ( @plot_regions) {
-	     IPA::Region::plot( $centers, $_, 0, 0, 255);
+	     Prima::IPA::Region::plot( $centers, $_, 0, 0, 255);
 	  }
        }
    }
@@ -1205,25 +1205,25 @@ sub process
    my $ls = int(( $ww * 8 + 31) / 32) * 4;
    my $dy = int($hh / 20);
    my $szy = int(($hh - 2 * $dy) / $w->{ini}->{nLines});
-   $i = IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
+   $i = Prima::IPA::Global::area_filter( $i, minArea => $min_area, maxArea => $maxArea);
 
-   my $lines = IPA::Morphology::thinning( $i); 
-   my $prune_lut = $IPA::Morphology::transform_luts{prune}->();
+   my $lines = Prima::IPA::Morphology::thinning( $i); 
+   my $prune_lut = $Prima::IPA::Morphology::transform_luts{prune}->();
    $dd = $rad;
-   $lines = IPA::Morphology::BWTransform( $lines, lookup => $prune_lut) while $dd--;
-   $lines = IPA::Global::area_filter( $lines, minArea => $rad * 2, maxArea => $maxArea);
+   $lines = Prima::IPA::Morphology::BWTransform( $lines, lookup => $prune_lut) while $dd--;
+   $lines = Prima::IPA::Global::area_filter( $lines, minArea => $rad * 2, maxArea => $maxArea);
    rop_put( $lines, $centers, rop::NotSrcAnd);
-   rop_put( $centers, IPA::Morphology::erode( $centers), rop::NotSrcAnd);
+   rop_put( $centers, Prima::IPA::Morphology::erode( $centers), rop::NotSrcAnd);
 
 
    $w-> sb_text( sprintf( "%d%% ( find centroids )", $pct += $step));
 
    if ( $mode == 3) {
       $i = $orgi-> dup;
-      $i = IPA::Point::remap( $i, lookup => [ 2, 2, ( 2 .. 255)]);
+      $i = Prima::IPA::Point::remap( $i, lookup => [ 2, 2, ( 2 .. 255)]);
       $i-> rop( rop::NotSrcAnd);
       $i-> put_image( 0, 0, $lines);
-      $i = IPA::Point::remap( $i, lookup => [ 1, ( 1 .. 255)]);
+      $i = Prima::IPA::Point::remap( $i, lookup => [ 1, ( 1 .. 255)]);
       $i-> rop( rop::NotSrcAnd);
       $i-> put_image( 0, 0, $centers);
       $i-> type( im::bpp8);
@@ -1234,7 +1234,7 @@ sub process
       return;
    }
 
-   CONTO: for( @{IPA::Global::identify_contours( $centers)}) {
+   CONTO: for( @{Prima::IPA::Global::identify_contours( $centers)}) {
       my $flip = 0;
       for ( @$_) {
          #next CONTO if $_ >= $end_excl[ $flip] || $_ < $start_excl[$flip];

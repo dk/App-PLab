@@ -6,7 +6,7 @@ use warnings;
 use Prima;
 use Prima::Application name => "PrAverB";
 use App::PLab::ImageApp;
-use IPA qw/Point/;
+use Prima::IPA qw/Point/;
 
 # $ImageApp::testing = 1;
 $::application-> icon( App::PLab::ImageAppGlyphs::icon( bga::drawprocesses));
@@ -661,8 +661,8 @@ SD
          $i++;
          my ( $i1, $imask, $i2) = $w-> fig_getspots( $_);
          my $t    = $_-> {threshold};
-         my $mask = IPA::Point::threshold( $i2, minvalue => $t, maxvalue => 255);
-         my $a2   = IPA::Point::mask( $mask, mismatch => $i2);
+         my $mask = Prima::IPA::Point::threshold( $i2, minvalue => $t, maxvalue => 255);
+         my $a2   = Prima::IPA::Point::mask( $mask, mismatch => $i2);
          my $area  = $mask-> sum / 255;
          my $sum2 = $a2-> sum;
          my $ave  = $area ? $sum2 / $area : 0;
@@ -817,10 +817,10 @@ sub fig_propdialog
           onPostMessage => sub {
              my $self = $_[0];
              my $v    = $self-> value;
-             my $mask = IPA::Point::threshold(
+             my $mask = Prima::IPA::Point::threshold(
                       $i2, minvalue => $v, maxvalue => 255
              );
-             my $a2 = IPA::Point::mask( $mask, mismatch => $i2);
+             my $a2 = Prima::IPA::Point::mask( $mask, mismatch => $i2);
              my $area  = $mask-> sum / 255;
              my $sum2 = $a2-> sum;
              my $ave  = int(($area ? $sum2 / $area : 0) * 1000) / 1000;
@@ -892,7 +892,7 @@ sub fig_getspots
    $imask-> fillpoly( [@p, @p[0,1]]);
    $imask-> end_paint;
    $imask-> type( im::Byte);
-   my $i2 = IPA::Point::mask( $imask, mismatch => $i1);
+   my $i2 = Prima::IPA::Point::mask( $imask, mismatch => $i1);
    return $i1, $imask, $i2;
 }
 
