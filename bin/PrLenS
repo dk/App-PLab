@@ -122,9 +122,9 @@ sub on_create
              my $c = $self-> color;
              return unless $c;
              $canvas-> color( cl::Black);
-             $canvas-> fill_ellipse( 10, 10, 10, 10);
+             $canvas-> fill_ellipse( map { $_ * $scale } 10, 10, 10, 10);
              $canvas-> color( $c);
-             $canvas-> fill_ellipse( 10, 10, 8, 8);
+             $canvas-> fill_ellipse( map { $_ * $scale } 10, 10, 8, 8);
           },
       ], 
       [ Label =>
