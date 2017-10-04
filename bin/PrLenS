@@ -62,6 +62,8 @@ sub on_create
    $self-> {dataExt}            = 'pls';
    
    my $tb  = $self-> ToolBar;
+   my $scale = $::application-> uiScaling;
+   $scale = 1 if $scale < 1;
 
    my %btn_profile = (
      glyphs      => 1,
@@ -69,7 +71,7 @@ sub on_create
      selectable  => 0,
      transparent => 1,
      flat        => 1,
-     size        => [ 36, 36],
+     size        => [ map { $_ * $scale } 36, 36],
      borderWidth => 1,
      enabled     => 0,
    );
@@ -77,7 +79,7 @@ sub on_create
    $tb-> insert(
       [ SpeedButton =>
          name    => "MarkCells",
-         origin  => [120, 1],
+         origin  => [120 * $scale, 1],
          image   => App::PLab::ImageAppGlyphs::icon( bga::cells),
          onClick => sub { $w-> mark_cells },
          hint    => "Mark cells mode",
@@ -85,7 +87,7 @@ sub on_create
       ],
       [ SpeedButton =>
          name    => "MarkProcesses",
-         origin  => [160, 1],
+         origin  => [160 * $scale, 1],
          image   => App::PLab::ImageAppGlyphs::icon( bga::processes),
          onClick => sub { $w-> mark_processes} , 
          hint    => "Mark processes mode",
@@ -93,7 +95,7 @@ sub on_create
       ],
       [ SpeedButton =>
          name    => "DrawProcesses",
-         origin  => [200, 1],
+         origin  => [200 * $scale, 1],
          image   => App::PLab::ImageAppGlyphs::icon( bga::drawprocesses),
          onClick => sub { $w-> draw_processes} ,
          hint    => "Draw processes mode",
@@ -103,8 +105,8 @@ sub on_create
          name => "CellsProcesses",
          font => { size => 10, pitch => fp::Fixed}, 
          color => cl::Red,
-         origin => [ 249, 8],
-	 size   => [ 80, 20],
+         origin => [ 249 * $scale, 8 * $scale],
+	 size   => [ 80 * $scale, 20 * $scale],
          transparent => 1,
          text   => "???:???",
 	 valignment => ta::Middle,
@@ -112,8 +114,8 @@ sub on_create
       [ Widget => 
           name => "MarkStateEx",
           transparent => 1,
-          origin  => [ 336, 8],
-          size    => [ 20, 20],
+          origin  => [ 336 * $scale, 8 * $scale],
+          size    => [ 20 * $scale, 20 * $scale],
           color   => 0,
           onPaint => sub {
              my ( $self, $canvas) = @_;
@@ -131,8 +133,8 @@ sub on_create
          font => { size => 10, pitch => fp::Variable},  
          transparent => 1,
          color => cl::Black,
-         origin => [ 356, 8],
-	 height => 20,
+         origin => [ 356 * $scale, 8 * $scale],
+	 height => 20 * $scale,
 	 valignment => ta::Middle,
          onMouseDown => sub {
             my ( $self, $btn, $mod, $x, $y) = @_;
