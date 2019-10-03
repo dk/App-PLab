@@ -6,6 +6,7 @@ use Prima;
 use Prima::Application name => "PrLenS";
 use Prima::Edit;
 use Prima::ExtLists;
+use App::PLab;
 use App::PLab::ImageApp;
 use App::PLab::Calibrations;
 use Prima::IPA qw/Local Misc Point Global Morphology Region/;
