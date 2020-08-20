@@ -14,7 +14,7 @@ WriteMakefile(
     VERSION_FROM => 'lib/App/PLab.pm',
     EXE_FILES    => [ ls 'bin' ],
     PREREQ_PM    => {
-    	Prima         => 0,
+    	Prima         => 1.59,
 	'Prima::IPA'  => 0,
 	'XML::Parser' => 0,
     },
