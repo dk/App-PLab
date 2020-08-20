@@ -1050,9 +1050,11 @@ BODY
      	        my ($sum,$sum2);
                 my @pixarray = (0) x 256;
                 if ( $n != 0) {
+                   my $image_mask = $image;
+                   $image_mask = $image_mask->clone(type => im::Byte) if $image_mask->type != im::Byte;
                    $img = Prima::IPA::Point::mask( $img,
                       test => 255,
-                      match => $image,
+                      match => $image_mask,
                       mismatch => 0
                    );
                    $sum = $img-> sum;
