@@ -1050,7 +1050,7 @@ BODY
      	        my ($sum,$sum2);
                 my @pixarray = (0) x 256;
                 if ( $n != 0) {
-                   $img = IPA::Point::mask( $img,
+                   $img = Prima::IPA::Point::mask( $img,
                       test => 255,
                       match => $image,
                       mismatch => 0
@@ -1679,7 +1679,7 @@ HR
       my $dir = eval { Cwd::abs_path( $w-> {ini}-> {StatPath})};
       $dir = '.' if $@;
       $dir = '' unless -d $dir;
-      my $d = Prima::SaveDialog-> create(
+      my $d = Prima::Dialog::SaveDialog-> create(
          owner   => $dlg,
          filter  => [
             ['Text files' => '*.txt'],

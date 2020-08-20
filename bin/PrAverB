@@ -586,7 +586,7 @@ sub win_printframe
    my ( $w, $usedlg) = @_;
    if ( $usedlg) {
       my $d = $w-> {printerDialog};
-      $w-> {printerDialog} = $d = Prima::PrintSetupDialog-> create( owner => $w) unless $d;
+      $w-> {printerDialog} = $d = Prima::Dialog::PrintSetupDialog-> create( owner => $w) unless $d;
       $w-> iv_cancelmode( $w-> IV);
       return unless $d-> execute;
    }

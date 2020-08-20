@@ -7,16 +7,16 @@ use strict;
 use Carp;
 use Cwd qw(abs_path);
 
-use Prima qw( StartupWindow StdBitmap Widgets StdDlg ImageViewer MsgBox
+use Prima qw( StartupWindow StdBitmap Widgets Dialog::FileDialog ImageViewer MsgBox
               IniFile Sliders Utils Notebooks ComboBox Buttons Label Outlines
-              ColorDialog KeySelector ImageDialog);
+              Dialog::ColorDialog KeySelector Dialog::ImageDialog Dialog::PrintDialog);
 use App::PLab::ButtonGlyphs;
 use App::PLab::ImageAppGlyphs;
 no Prima::StartupWindow;
 
 package App::PLab::SerOpenDialog;
 use vars qw(@ISA);
-@ISA = qw(Prima::ImageOpenDialog);
+@ISA = qw(Prima::Dialog::ImageOpenDialog);
 
 sub init
 {
@@ -291,7 +291,7 @@ sub dlg_okcancel
 sub dlg_file
 {
    my ( $w, %profile) = @_;
-   my $d = $w-> {fileDlg} ? $w-> {fileDlg} : Prima::OpenDialog-> create(
+   my $d = $w-> {fileDlg} ? $w-> {fileDlg} : Prima::Dialog::OpenDialog-> create(
       owner     => $w,
    );
    if ( $profile{cwd}) {
@@ -957,7 +957,7 @@ sub opt_propcreate
       borderWidth => 1,
       hint    => 'Select custom directory where additional files will be saved',
       onClick => sub {
-         my $d = defined $w->{dirpt} ? $w->{dirpt} : Prima::ChDirDialog-> create;
+         my $d = defined $w->{dirpt} ? $w->{dirpt} : Prima::Dialog::ChDirDialog-> create;
          $w->{dirpt} = $d;
          $d-> directory( $_[0]-> owner-> Path-> text);
          if ( $d-> execute != mb::Cancel) {
